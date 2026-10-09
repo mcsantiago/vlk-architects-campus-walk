@@ -1,0 +1,50 @@
+# Local backing services. Postgres for the API, RustFS as an S3 stand-in (MinIO's public
+# Docker images were withdrawn in 2025; RustFS is API-compatible and uses the same ports).
+# No Docker? DATABASE_URL=pglite://.data/pg runs an embedded Postgres instead (see README).
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: campus
+      POSTGRES_PASSWORD: campus
+      POSTGRES_DB: campus_walk
+    ports:
+      - '5432:5432'
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U campus -d campus_walk']
+      interval: 2s
+      timeout: 2s
+      retries: 15
+
+  s3:
+    image: rustfs/rustfs:latest
+    environment:
+      RUSTFS_ACCESS_KEY: rustfs
+      RUSTFS_SECRET_KEY: rustfs12345
+      RUSTFS_VOLUMES: /data
+      RUSTFS_CONSOLE_ENABLE: 'true'
+    ports:
+      - '9000:9000' # S3 API
+      - '9001:9001' # web console
+    volumes:
+      - s3data:/data
+
+  # One-shot: wait for the S3 server, create the photo bucket, exit.
+  s3-init:
+    image: amazon/aws-cli:latest
+    depends_on:
+      - s3
+    environment:
+      AWS_ACCESS_KEY_ID: rustfs
+      AWS_SECRET_ACCESS_KEY: rustfs12345
+      AWS_REGION: us-east-1
+    entrypoint: >
+      sh -c "until aws --endpoint-url http://s3:9000 s3 ls >/dev/null 2>&1; do sleep 1; done;
+             aws --endpoint-url http://s3:9000 s3 mb s3://campus-walk-photos 2>/dev/null || true;
+             aws --endpoint-url http://s3:9000 s3 ls"
+
+volumes:
+  pgdata:
+  s3data:

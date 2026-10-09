@@ -1,0 +1,60 @@
+import { mkdirSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { PGlite } from '@electric-sql/pglite';
+import type { PgDatabase, PgQueryResultHKT } from 'drizzle-orm/pg-core';
+import { drizzle as drizzlePglite } from 'drizzle-orm/pglite';
+import { migrate as migratePglite } from 'drizzle-orm/pglite/migrator';
+import { drizzle as drizzlePg } from 'drizzle-orm/node-postgres';
+import { migrate as migratePg } from 'drizzle-orm/node-postgres/migrator';
+import pg from 'pg';
+import * as schema from './schema.ts';
+
+export type Db = PgDatabase<PgQueryResultHKT, typeof schema>;
+
+export interface DbHandle {
+  db: Db;
+  migrate(): Promise<void>;
+  close(): Promise<void>;
+}
+
+const migrationsFolder = fileURLToPath(new URL('../../drizzle', import.meta.url));
+
+/**
+ * DATABASE_URL selects the driver:
+ *   postgres://...        -> node-postgres (RDS, or any real Postgres)
+ *   pglite://<dir>        -> embedded Postgres persisted to <dir> (local dev default)
+ *   pglite://memory       -> embedded, in-memory (tests)
+ */
+export function createDb(url = process.env.DATABASE_URL ?? 'pglite://.data/pg'): DbHandle {
+  if (url.startsWith('pglite://')) {
+    const target = url.slice('pglite://'.length);
+    let client: PGlite;
+    if (target === 'memory') {
+      client = new PGlite();
+    } else {
+      const dir = path.resolve(target);
+      mkdirSync(dir, { recursive: true });
+      client = new PGlite(dir);
+    }
+    const db = drizzlePglite(client, { schema });
+    return {
+      db,
+      migrate: () => migratePglite(db, { migrationsFolder }),
+      close: () => client.close(),
+    };
+  }
+
+  const pool = new pg.Pool({
+    connectionString: url,
+    // RDS requires TLS; the RDS CA is not in Node's default store, so skip verification there.
+    ssl: process.env.DATABASE_SSL === 'require' ? { rejectUnauthorized: false } : false,
+    max: 10,
+  });
+  const db = drizzlePg(pool, { schema });
+  return {
+    db,
+    migrate: () => migratePg(db, { migrationsFolder }),
+    close: () => pool.end(),
+  };
+}

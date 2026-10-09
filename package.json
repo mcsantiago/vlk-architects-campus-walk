@@ -1,0 +1,19 @@
+{
+  "name": "campus-walk",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev -w @campus-walk/api",
+    "test": "npm test --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "db:generate": "npm run db:generate -w @campus-walk/api",
+    "db:seed": "npm run db:seed -w @campus-walk/api"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
