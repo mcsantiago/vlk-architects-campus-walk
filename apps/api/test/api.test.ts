@@ -272,3 +272,47 @@ describe('office summary', () => {
     expect(body.countsByType.every((t: { name: string }) => t.name !== 'Student Desk')).toBe(true);
   });
 });
+
+describe('copy', () => {
+  it('copies the descriptive fields to another room as a new record, leaving photos behind', async () => {
+    const source = (
+      await call('POST', '/assets', {
+        roomId: room('104').id,
+        assetTypeId: typeId['Student Desk'],
+        quantity: 24,
+        condition: 3,
+        label: 'row desks',
+        notes: 'laminate chipped on several',
+      })
+    ).body;
+
+    const copy = await call('POST', `/assets/${source.id}/copy`, { roomId: room('106').id });
+    expect(copy.status).toBe(201);
+    expect(copy.body).toMatchObject({
+      roomId: room('106').id,
+      floorId: room('106').floorId,
+      quantity: 24,
+      condition: 3,
+      label: 'row desks',
+      notes: 'laminate chipped on several',
+      version: 1,
+      assetType: { name: 'Student Desk' },
+    });
+    expect(copy.body.id).not.toBe(source.id);
+    expect((await call('GET', `/assets/${copy.body.id}`)).body.events).toEqual([
+      expect.objectContaining({ kind: 'created', changedBy: { id: userId, name: WALKER } }),
+    ]);
+    // the original is untouched
+    expect((await call('GET', `/assets/${source.id}`)).body).toMatchObject({ roomId: room('104').id, version: 1 });
+
+    // building level copy, bad location, unknown source
+    expect((await call('POST', `/assets/${source.id}/copy`, { buildingId: building('B').id })).body).toMatchObject({
+      buildingId: building('B').id,
+      floorId: null,
+      roomId: null,
+    });
+    expect((await call('POST', `/assets/${source.id}/copy`, {})).status).toBe(400);
+    expect((await call('POST', `/assets/${randomUUID()}/copy`, { roomId: room('106').id })).status).toBe(404);
+    expect((await call('POST', `/assets/${source.id}/copy`, { roomId: room('106').id }, null)).status).toBe(401);
+  });
+});

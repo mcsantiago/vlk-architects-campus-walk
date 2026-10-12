@@ -34,10 +34,19 @@ export const user = pgTable(
   (t) => [uniqueIndex('app_user_name_lower_uq').on(sql`lower(${t.name})`)],
 );
 
+/** Site address and a point of contact, shown on the campus and building screens. All optional. */
+const siteInfo = {
+  address: text('address'),
+  contactName: text('contact_name'),
+  contactPhone: text('contact_phone'),
+  contactEmail: text('contact_email'),
+};
+
 export const campus = pgTable('campus', {
   id: id(),
   name: text('name').notNull(),
   district: text('district').notNull(),
+  ...siteInfo,
   createdAt: createdAt(),
 });
 
@@ -51,6 +60,7 @@ export const building = pgTable(
     name: text('name').notNull(),
     code: text('code').notNull(),
     yearBuilt: integer('year_built'),
+    ...siteInfo,
     createdAt: createdAt(),
   },
   (t) => [unique('building_campus_code_uq').on(t.campusId, t.code)],
@@ -167,17 +177,26 @@ export const asset = pgTable(
   ],
 );
 
+/**
+ * A photo is of an asset, of a room itself (context shots: the whole room, a wall), or not yet
+ * attached (taken before the asset was saved). Never both an asset and a room.
+ */
 export const photo = pgTable(
   'photo',
   {
     id: id(),
     assetId: uuid('asset_id').references(() => asset.id, { onDelete: 'cascade' }),
+    roomId: uuid('room_id').references(() => room.id, { onDelete: 'cascade' }),
     /** Object key in the photo bucket; URLs are presigned on read. */
     s3Key: text('s3_key').notNull().unique(),
     aiSuggestion: jsonb('ai_suggestion'),
     createdAt: createdAt(),
   },
-  (t) => [index('photo_asset_idx').on(t.assetId)],
+  (t) => [
+    index('photo_asset_idx').on(t.assetId),
+    index('photo_room_idx').on(t.roomId),
+    check('photo_one_subject_ck', sql`${t.assetId} IS NULL OR ${t.roomId} IS NULL`),
+  ],
 );
 
 export const ASSET_EVENT_KINDS = ['created', 'moved', 'updated', 'deleted'] as const;

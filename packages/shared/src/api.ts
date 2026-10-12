@@ -63,6 +63,10 @@ export type MoveAssetInput = z.infer<typeof MoveAssetInput>;
 export const DeleteAssetInput = z.object({ version });
 export type DeleteAssetInput = z.infer<typeof DeleteAssetInput>;
 
+/** Copy an asset (type, quantity, condition, label, notes; not its photos) to another location. */
+export const CopyAssetInput = LocationInput;
+export type CopyAssetInput = z.infer<typeof CopyAssetInput>;
+
 /** Photo uploads go straight from the phone to object storage via a presigned PUT. */
 export const IMAGE_CONTENT_TYPES = ['image/jpeg', 'image/png', 'image/webp'] as const;
 export type ImageContentType = (typeof IMAGE_CONTENT_TYPES)[number];
@@ -71,11 +75,15 @@ export const CreateUploadInput = z.object({ contentType: z.enum(IMAGE_CONTENT_TY
 export type CreateUploadInput = z.infer<typeof CreateUploadInput>;
 
 /** Records an uploaded object as a photo and runs the AI suggestion over it. */
-export const CreatePhotoInput = z.object({
-  s3Key: z.string().min(1).max(200),
-  /** Omit when the photo is taken before the asset exists; pass photoIds to POST /assets instead. */
-  assetId: uuid.nullable().optional(),
-});
+export const CreatePhotoInput = z
+  .object({
+    s3Key: z.string().min(1).max(200),
+    /** Omit when the photo is taken before the asset exists; pass photoIds to POST /assets instead. */
+    assetId: uuid.nullable().optional(),
+    /** A photo of the room itself rather than of one asset. */
+    roomId: uuid.nullable().optional(),
+  })
+  .refine((p) => !(p.assetId && p.roomId), { message: 'a photo belongs to an asset or a room, not both' });
 export type CreatePhotoInput = z.infer<typeof CreatePhotoInput>;
 
 export const SUGGESTION_CONFIDENCES = ['low', 'medium', 'high'] as const;

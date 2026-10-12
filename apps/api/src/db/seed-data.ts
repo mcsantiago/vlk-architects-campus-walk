@@ -32,7 +32,13 @@ export interface FloorSpec {
   /** Floor-level assets, e.g. a corridor fire alarm panel. */
   assets?: AssetSpec[];
 }
-export interface BuildingSpec {
+export interface SiteInfoSpec {
+  address?: string;
+  contactName?: string;
+  contactPhone?: string;
+  contactEmail?: string;
+}
+export interface BuildingSpec extends SiteInfoSpec {
   code: string;
   name: string;
   yearBuilt: number;
@@ -42,7 +48,7 @@ export interface BuildingSpec {
   /** Building-level assets, e.g. rooftop HVAC. */
   assets?: AssetSpec[];
 }
-export interface CampusSpec {
+export interface CampusSpec extends SiteInfoSpec {
   name: string;
   district: string;
   buildings: BuildingSpec[];
@@ -115,12 +121,19 @@ const classroom = (number: string, name: string): RoomSpec => ({ number, name, t
 
 export const CAMPUS: CampusSpec = {
   name: 'Live Oak K-8',
-  district: 'Cedar Valley USD',
+  district: 'Cedar Valley ISD',
+  address: '4120 Live Oak Dr, Cedar Valley, TX 76000',
+  contactName: 'Marisol Reyes, Principal',
+  contactPhone: '(817) 555-0142',
+  contactEmail: 'mreyes@cedarvalleyisd.example',
   buildings: [
     {
       code: 'A',
       name: 'Main Classroom Building',
       yearBuilt: 1998,
+      address: '4120 Live Oak Dr',
+      contactName: 'Front office',
+      contactPhone: '(817) 555-0142',
       walker: 'Dana R.',
       assets: [
         { type: 'Rooftop HVAC Unit', label: 'RTU-1', condition: 3, notes: 'Serves east wing. Compressor noisy.' },
@@ -226,6 +239,9 @@ export const CAMPUS: CampusSpec = {
       code: 'B',
       name: 'Gym & Cafeteria',
       yearBuilt: 2006,
+      address: '4120 Live Oak Dr (north lot)',
+      contactName: 'Tom Delgado, Head Custodian',
+      contactPhone: '(817) 555-0188',
       walker: 'Priya S.',
       assets: [
         { type: 'Rooftop HVAC Unit', label: 'RTU-3', condition: 4 },
@@ -288,6 +304,10 @@ export const CAMPUS: CampusSpec = {
       code: 'C',
       name: 'Administration',
       yearBuilt: 1998,
+      address: '4120 Live Oak Dr',
+      contactName: 'Marisol Reyes, Principal',
+      contactPhone: '(817) 555-0142',
+      contactEmail: 'mreyes@cedarvalleyisd.example',
       walker: 'Dana R.',
       assets: [
         { type: 'Rooftop HVAC Unit', label: 'RTU-5', condition: 3 },
@@ -338,6 +358,7 @@ export const CAMPUS: CampusSpec = {
       code: 'P',
       name: 'Portables',
       yearBuilt: 2015,
+      address: '4120 Live Oak Dr (south field)',
       walker: 'Priya S.',
       floors: [
         {

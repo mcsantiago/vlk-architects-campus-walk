@@ -10,6 +10,7 @@ import { getAsset } from './assets.ts';
 export interface PhotoView {
   id: string;
   assetId: string | null;
+  roomId: string | null;
   url: string;
   suggestion: AiSuggestion | null;
   createdAt: Date;
@@ -25,6 +26,7 @@ async function toView(storage: PhotoStorage, row: typeof s.photo.$inferSelect): 
   return {
     id: row.id,
     assetId: row.assetId,
+    roomId: row.roomId,
     url: await storage.presignDownload(row.s3Key),
     suggestion: (row.aiSuggestion as AiSuggestion | null) ?? null,
     createdAt: row.createdAt,
@@ -46,6 +48,10 @@ export async function createPhoto(
   const [existing] = await db.select({ id: s.photo.id }).from(s.photo).where(eq(s.photo.s3Key, input.s3Key));
   if (existing) throw badRequest('photo already recorded for this upload');
   if (input.assetId && !(await getAsset(db, input.assetId))) throw notFound('asset');
+  if (input.roomId) {
+    const [room] = await db.select({ id: s.room.id }).from(s.room).where(eq(s.room.id, input.roomId));
+    if (!room) throw notFound('room');
+  }
 
   const object = await storage.get(input.s3Key);
   if (!object) throw badRequest('upload not found; PUT the file to the upload URL first');
@@ -59,9 +65,20 @@ export async function createPhoto(
 
   const [row] = await db
     .insert(s.photo)
-    .values({ assetId: input.assetId ?? null, s3Key: input.s3Key, aiSuggestion: suggestion })
+    .values({ assetId: input.assetId ?? null, roomId: input.roomId ?? null, s3Key: input.s3Key, aiSuggestion: suggestion })
     .returning();
   return toView(storage, row!);
+}
+
+export async function getPhoto(db: Db, storage: PhotoStorage, id: string): Promise<PhotoView | null> {
+  const [row] = await db.select().from(s.photo).where(eq(s.photo.id, id));
+  return row ? toView(storage, row) : null;
+}
+
+/** Photos of the room itself (not of its assets), oldest first. */
+export async function photosByRoom(db: Db, storage: PhotoStorage, roomId: string): Promise<PhotoView[]> {
+  const rows = await db.select().from(s.photo).where(eq(s.photo.roomId, roomId)).orderBy(s.photo.createdAt);
+  return Promise.all(rows.map((row) => toView(storage, row)));
 }
 
 /** Photos for a set of assets in one query, keyed by asset id. */
@@ -96,9 +113,9 @@ export async function attachPhotos(db: Db, assetId: string, photoIds: string[]) 
   const rows = await db
     .update(s.photo)
     .set({ assetId })
-    .where(and(inArray(s.photo.id, photoIds), isNull(s.photo.assetId)))
+    .where(and(inArray(s.photo.id, photoIds), isNull(s.photo.assetId), isNull(s.photo.roomId)))
     .returning({ id: s.photo.id });
-  if (rows.length !== new Set(photoIds).size) throw badRequest('a photo was not found or is already attached to an asset');
+  if (rows.length !== new Set(photoIds).size) throw badRequest('a photo was not found or is already attached');
 }
 
 export async function deletePhoto(db: Db, storage: PhotoStorage, id: string) {

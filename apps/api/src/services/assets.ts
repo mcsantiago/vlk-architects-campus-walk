@@ -1,5 +1,5 @@
 import { and, eq, isNull, sql, type SQL } from 'drizzle-orm';
-import type { CreateAssetInput, MoveAssetInput, UpdateAssetInput } from '@campus-walk/shared';
+import type { CopyAssetInput, CreateAssetInput, MoveAssetInput, UpdateAssetInput } from '@campus-walk/shared';
 import type { Db } from '../db/client.ts';
 import * as s from '../db/schema.ts';
 import { badRequest, conflict, notFound } from '../errors.ts';
@@ -110,6 +110,28 @@ export async function createAsset(db: Db, input: CreateAssetInput, actorId: stri
     await tx.insert(s.assetEvent).values({ assetId: created.id, kind: 'created', after: created, changedBy: actorId });
     return created;
   });
+}
+
+/**
+ * Copies an asset's descriptive fields to another location as a new record with its own
+ * version and history. Photos stay with the original: they are of that unit, not this one.
+ */
+export async function copyAsset(db: Db, id: string, input: CopyAssetInput, actorId: string): Promise<AssetView> {
+  const source = await getAsset(db, id);
+  if (!source) throw notFound('asset');
+  return createAsset(
+    db,
+    {
+      ...input,
+      assetTypeId: source.assetType.id,
+      label: source.label,
+      quantity: source.quantity,
+      condition: source.condition,
+      notes: source.notes,
+      photoIds: [],
+    },
+    actorId,
+  );
 }
 
 export async function updateAsset(db: Db, id: string, input: UpdateAssetInput, actorId: string): Promise<AssetView> {

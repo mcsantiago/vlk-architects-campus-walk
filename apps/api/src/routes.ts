@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import {
+  CopyAssetInput,
   CreateAssetInput,
   CreatePhotoInput,
   CreateUploadInput,
@@ -11,17 +12,18 @@ import {
 import { requireUser, type Env } from './app.ts';
 import * as s from './db/schema.ts';
 import { HttpError, idParam, notFound, parseBody } from './errors.ts';
-import { createAsset, deleteAsset, getAsset, listAssetEvents, moveAsset, updateAsset } from './services/assets.ts';
+import { copyAsset, createAsset, deleteAsset, getAsset, listAssetEvents, moveAsset, updateAsset } from './services/assets.ts';
 import {
   getCampusSummary,
   getCampusTree,
   getRoom,
   listBuildingSystems,
   listCampuses,
+  roomHeader,
   setRoomWalked,
 } from './services/campus.ts';
 import { exportAssetsCsv, exportRoomsCsv, importRoomsCsv } from './services/csv.ts';
-import { createPhoto, createUpload, deletePhoto, withPhotos } from './services/photos.ts';
+import { createPhoto, createUpload, deletePhoto, getPhoto, photosByRoom, withPhotos } from './services/photos.ts';
 import { findOrCreateUser, listUsers } from './services/users.ts';
 
 export const routes = new Hono<Env>();
@@ -67,7 +69,12 @@ routes.get('/buildings/:id/systems', async (c) => {
 routes.get('/rooms/:id', async (c) => {
   const db = c.get('db');
   const room = await getRoom(db, idParam(c));
-  return c.json({ ...room, assets: await withPhotos(db, c.get('storage'), room.assets) });
+  const storage = c.get('storage');
+  return c.json({
+    ...room,
+    photos: await photosByRoom(db, storage, room.id),
+    assets: await withPhotos(db, storage, room.assets),
+  });
 });
 routes.post('/rooms/:id/walked', async (c) =>
   c.json(await setRoomWalked(c.get('db'), idParam(c), await requireUser(c))),
@@ -100,6 +107,11 @@ routes.post('/assets/:id/move', async (c) => {
   const input = await parseBody(c, MoveAssetInput);
   return c.json(await moveAsset(c.get('db'), idParam(c), input, actorId));
 });
+routes.post('/assets/:id/copy', async (c) => {
+  const actorId = await requireUser(c);
+  const input = await parseBody(c, CopyAssetInput);
+  return c.json(await copyAsset(c.get('db'), idParam(c), input, actorId), 201);
+});
 routes.delete('/assets/:id', async (c) => {
   const actorId = await requireUser(c);
   const { version } = await parseBody(c, DeleteAssetInput);
@@ -120,6 +132,17 @@ routes.post('/photos', async (c) => {
   await requireUser(c);
   const input = await parseBody(c, CreatePhotoInput);
   return c.json(await createPhoto(c.get('db'), c.get('storage'), c.get('suggester'), input), 201);
+});
+/** One photo with what it is attached to, for the photo screen. */
+routes.get('/photos/:id', async (c) => {
+  const db = c.get('db');
+  const photo = await getPhoto(db, c.get('storage'), idParam(c));
+  if (!photo) throw notFound('photo');
+  return c.json({
+    ...photo,
+    asset: photo.assetId ? await getAsset(db, photo.assetId) : null,
+    room: photo.roomId ? await roomHeader(db, photo.roomId) : null,
+  });
 });
 routes.delete('/photos/:id', async (c) => {
   await requireUser(c);

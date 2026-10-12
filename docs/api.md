@@ -1,6 +1,6 @@
 # Campus Walk — API Contract
 
-Base URL locally: `http://localhost:3000`. All bodies and responses are JSON unless noted. Status as of 2026-10-12; every endpoint below is implemented and covered by `apps/api/test/*.test.ts`.
+Base URL locally: `http://localhost:3000`. All bodies and responses are JSON unless noted. Status as of 2026-10-12; every endpoint below (24) is implemented and covered by `apps/api/test/*.test.ts`.
 
 ## Conventions
 
@@ -66,11 +66,22 @@ Reads never need it. Writes without it, or with an id that is not a known user, 
 ```
 Location: `buildingId` is always set. `floorId` null = building-level asset (rooftop unit). `roomId` null with `floorId` set = floor-level asset (corridor panel). Soft-deleted assets never appear anywhere.
 
+### `Campus`
+```json
+{
+  "id": "uuid", "name": "Live Oak K-8", "district": "Cedar Valley ISD",
+  "address": "string | null", "contactName": "string | null", "contactPhone": "string | null", "contactEmail": "string | null",
+  "createdAt": "..."
+}
+```
+Buildings carry the same four address/contact fields (all nullable) next to `name`, `code` and `yearBuilt`.
+
 ### `Photo`
 ```json
 {
   "id": "uuid",
   "assetId": "uuid | null",
+  "roomId": "uuid | null",
   "url": "https://... presigned GET, valid 15 minutes",
   "suggestion": <AiSuggestion> | null,
   "createdAt": "..."
@@ -88,7 +99,7 @@ Location: `buildingId` is always set. `floorId` null = building-level asset (roo
   "model": "anthropic.claude-opus-5-5"
 }
 ```
-`null` for the whole suggestion means the model was off, refused, timed out or said nothing useful. The form then opens empty.
+A photo is of one asset (`assetId`), of the room itself (`roomId`), or not yet attached (both null, taken before the asset was saved). Never both. `null` for the whole suggestion means the model was off, refused, timed out or said nothing useful. The form then opens empty.
 
 ### `Location` (request fragment)
 ```json
@@ -118,20 +129,18 @@ Find or create by name. Matching is case-insensitive and trims whitespace, so `"
 
 ### `GET /campuses`
 **Auth:** none.
-**200** →
-```json
-[{ "id": "uuid", "name": "Live Oak K-8", "district": "Cedar Valley USD", "createdAt": "..." }]
-```
+**200** → `Campus[]`
 
 ### `GET /campuses/:id/tree`
 Everything the field app needs to navigate: buildings → floors → rooms with walk status and counts. **Auth:** none.
 **200** →
 ```json
 {
-  "id": "uuid", "name": "...", "district": "...", "createdAt": "...",
+  ...Campus,
   "progress": { "rooms": 36, "walked": 16 },
   "buildings": [{
-    "id": "uuid", "campusId": "uuid", "name": "Main Classroom Building", "code": "A", "yearBuilt": 1998, "createdAt": "...",
+    "id": "uuid", "campusId": "uuid", "name": "Main Classroom Building", "code": "A", "yearBuilt": 1998,
+    "address": "... | null", "contactName": "... | null", "contactPhone": "... | null", "contactEmail": "... | null", "createdAt": "...",
     "systemAssetCount": 11,
     "floors": [{
       "id": "uuid", "buildingId": "uuid", "name": "Floor 1", "level": 1, "createdAt": "...",
@@ -149,7 +158,7 @@ Everything the field app needs to navigate: buildings → floors → rooms with 
 **404** unknown campus.
 
 ### `GET /rooms/:id`
-Room with ancestry and its assets (with photos). **Auth:** none.
+Room with ancestry, photos of the room itself, and its assets (each with its own photos). **Auth:** none.
 **200** →
 ```json
 {
@@ -158,10 +167,11 @@ Room with ancestry and its assets (with photos). **Auth:** none.
   "walkedBy": { "id": "uuid", "name": "..." } | null,
   "floor": { "id": "uuid", "name": "Floor 1", "level": 1 },
   "building": { "id": "uuid", "name": "...", "code": "A" },
+  "photos": [ Photo ],
   "assets": [ Asset & { "photos": Photo[] } ]
 }
 ```
-Assets sort by category, type name, label, created time.
+`photos` are context shots of the room (`roomId` set); asset photos ride on each asset. Assets sort by category, type name, label, created time.
 **404** unknown room.
 
 ### `GET /buildings/:id/systems`
@@ -253,6 +263,14 @@ Moving to `buildingId` alone makes it a building-level asset; to `floorId` alone
 **200** → `Asset` with the new location and `version + 1`. Writes a `moved` event with before/after location.
 **409**, **400**, **401**, **404**.
 
+### `POST /assets/:id/copy`
+Copy an asset to another room, floor or building level. The copy gets the source's type, quantity, condition, label and notes as a new record with `version` 1 and its own `created` event. Photos stay with the original: they are of that unit, not the copy. **Auth:** required.
+```json
+{ "roomId" | "floorId" | "buildingId": "uuid" }     // Location, see above
+```
+**201** → the new `Asset`.
+**400** location mismatch or missing. **404** unknown source asset or location.
+
 ### `DELETE /assets/:id`
 Soft delete. The row and its history stay for audit; it leaves every listing and rollup. **Auth:** required.
 ```json
@@ -282,11 +300,17 @@ PUT the file to `url` with the same `Content-Type` header. The API mints the key
 ### `POST /photos`
 Record an uploaded object and run the AI suggestion over it. **Auth:** required.
 ```json
-{ "s3Key": "photos/<uuid>.jpg", "assetId": "uuid | null" }   // assetId optional
+{ "s3Key": "photos/<uuid>.jpg", "assetId": "uuid | null", "roomId": "uuid | null" }   // at most one of assetId / roomId
 ```
+Omit both for a photo taken before the asset exists (attach it via `POST /assets { photoIds }`); send `roomId` for a photo of the room itself.
 **201** → `Photo` (with `suggestion`, which may be null).
-**400** `"unknown upload key"` (not a key this API minted); `"upload not found; PUT the file to the upload URL first"`; `"photo already recorded for this upload"`; `"unsupported image type ..."`.
-**404** `assetId` unknown.
+**400** `"unknown upload key"` (not a key this API minted); `"upload not found; PUT the file to the upload URL first"`; `"photo already recorded for this upload"`; `"unsupported image type ..."`; both `assetId` and `roomId` given.
+**404** `assetId` or `roomId` unknown.
+
+### `GET /photos/:id`
+One photo with whatever it is attached to, for the photo screen. **Auth:** none.
+**200** → `Photo & { "asset": Asset | null, "room": <room header, the GET /rooms/:id shape without photos/assets> | null }`
+**404**.
 
 Suggestion runs only when `BEDROCK_MODEL` is configured on the server. Images over 4.5 MB skip it. Expect 2–6 s of latency when it runs.
 

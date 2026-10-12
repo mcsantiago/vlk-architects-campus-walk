@@ -1,0 +1,9 @@
+{
+  "name": "Campus Walk",
+  "short_name": "Walk",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f4f5f2",
+  "theme_color": "#1f4d3a",
+  "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml" }]
+}

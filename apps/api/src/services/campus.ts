@@ -69,7 +69,7 @@ export async function getCampusTree(db: Db, campusId: string) {
 }
 
 /** A room with its ancestry and walker, without assets. */
-async function roomHeader(db: Db, roomId: string) {
+export async function roomHeader(db: Db, roomId: string) {
   const [room] = await db
     .select({
       ...getTableColumns(s.room),

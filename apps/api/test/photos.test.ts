@@ -165,6 +165,31 @@ describe('photo flow', () => {
     expect(storage.objects.size).toBe(1); // the earlier photo's object remains
   });
 
+  it('records a photo of the room itself and serves it on the photo screen', async () => {
+    canned = null;
+    const photo = await call('POST', '/photos', { s3Key: await upload(), roomId });
+    expect(photo.status).toBe(201);
+    expect(photo.body).toMatchObject({ assetId: null, roomId });
+
+    const room = (await call('GET', `/rooms/${roomId}`)).body;
+    expect(room.photos.map((p: { id: string }) => p.id)).toContain(photo.body.id);
+    expect(room.assets.flatMap((a: { photos: unknown[] }) => a.photos)).not.toContainEqual(expect.objectContaining({ id: photo.body.id }));
+
+    // A room photo cannot be claimed by an asset, and a photo cannot have two subjects.
+    const claim = await call('POST', '/assets', { roomId, assetTypeId: projectorTypeId, condition: 3, photoIds: [photo.body.id] });
+    expect(claim.status).toBe(400);
+    const both = await call('POST', '/photos', { s3Key: await upload(), roomId, assetId: room.assets[0].id });
+    expect(both.status).toBe(400);
+
+    const detail = await call('GET', `/photos/${photo.body.id}`);
+    expect(detail.status).toBe(200);
+    expect(detail.body).toMatchObject({ id: photo.body.id, asset: null, room: { id: roomId, number: '105' } });
+    const assetPhoto = (await call('GET', `/rooms/${roomId}`)).body.assets.find((a: { photos: unknown[] }) => a.photos.length)!;
+    const detail2 = (await call('GET', `/photos/${assetPhoto.photos[0].id}`)).body;
+    expect(detail2).toMatchObject({ asset: { id: assetPhoto.id }, room: null });
+    expect((await call('GET', `/photos/${randomUUID()}`)).status).toBe(404);
+  });
+
   it('rejects keys it did not mint, missing uploads and duplicates', async () => {
     const forged = await call('POST', '/photos', { s3Key: 'seed/secret.jpg' });
     expect(forged.status).toBe(400);

@@ -2,7 +2,7 @@ import { pathToFileURL } from 'node:url';
 import { count } from 'drizzle-orm';
 import { createDb, type Db } from './client.ts';
 import * as s from './schema.ts';
-import { ASSET_TYPES, CAMPUS, type AssetSpec, type CampusSpec } from './seed-data.ts';
+import { ASSET_TYPES, CAMPUS, type AssetSpec, type CampusSpec, type SiteInfoSpec } from './seed-data.ts';
 
 const DAY_MS = 86_400_000;
 
@@ -21,9 +21,18 @@ function walkerNames(spec: CampusSpec): string[] {
  * Every asset gets a `created` event authored by the walker who recorded it, so the audit log
  * convention holds for seeded rows too.
  */
+const siteInfo = (i: SiteInfoSpec) => ({
+  address: i.address ?? null,
+  contactName: i.contactName ?? null,
+  contactPhone: i.contactPhone ?? null,
+  contactEmail: i.contactEmail ?? null,
+});
+
 export async function seedCampus(db: Db, spec: CampusSpec, now = new Date()) {
   await db.insert(s.assetType).values(ASSET_TYPES).onConflictDoNothing();
-  const typeIds = new Map((await db.select().from(s.assetType)).map((t) => [t.name, t.id]));
+  const types = await db.select().from(s.assetType);
+  const typeIds = new Map(types.map((t) => [t.name, t.id]));
+  const typeById = new Map(types.map((t) => [t.id, t]));
 
   await db.insert(s.user).values(walkerNames(spec).map((name) => ({ name }))).onConflictDoNothing();
   const userIds = new Map((await db.select().from(s.user)).map((u) => [u.name, u.id]));
@@ -35,7 +44,7 @@ export async function seedCampus(db: Db, spec: CampusSpec, now = new Date()) {
 
   const [campusRow] = await db
     .insert(s.campus)
-    .values({ name: spec.name, district: spec.district })
+    .values({ name: spec.name, district: spec.district, ...siteInfo(spec) })
     .returning();
   const campusId = campusRow!.id;
 
@@ -62,15 +71,21 @@ export async function seedCampus(db: Db, spec: CampusSpec, now = new Date()) {
         }),
       )
       .returning();
-    await db
-      .insert(s.assetEvent)
-      .values(rows.map((r) => ({ assetId: r.id, kind: 'created' as const, after: r, changedBy: actorId })));
+    // Same snapshot shape the API writes on create: the row plus its type, minus bookkeeping.
+    await db.insert(s.assetEvent).values(
+      rows.map(({ assetTypeId, deletedAt: _d, ...r }) => ({
+        assetId: r.id,
+        kind: 'created' as const,
+        after: { ...r, assetType: typeById.get(assetTypeId) },
+        changedBy: actorId,
+      })),
+    );
   };
 
   for (const b of spec.buildings) {
     const [bRow] = await db
       .insert(s.building)
-      .values({ campusId, code: b.code, name: b.name, yearBuilt: b.yearBuilt })
+      .values({ campusId, code: b.code, name: b.name, yearBuilt: b.yearBuilt, ...siteInfo(b) })
       .returning();
     const buildingId = bRow!.id;
     const buildingWalker = userId(b.walker);

@@ -1,6 +1,6 @@
 # Campus Walk — Systems Diagram
 
-Status as of 2026-10-12. **Solid** = built and tested. **Dashed** = planned (web app, AWS deploy).
+Status as of 2026-10-12. **Solid** = built and tested. **Dashed** = planned (AWS deploy).
 Mermaid blocks render in Obsidian's reading view.
 
 ## 1. System context
@@ -10,8 +10,8 @@ flowchart LR
   walker(["Walker on phone"])
   office(["Office on laptop"])
 
-  subgraph client["apps/web — React + Vite PWA (planned)"]
-    web["Field UI · Office summary"]
+  subgraph client["apps/web — React 19 + Vite"]
+    web["Field UI · Office summary\nTanStack Query · React Router"]
   end
 
   subgraph api["apps/api — Hono on Node"]
@@ -26,20 +26,18 @@ flowchart LR
   s3[("Object storage\nRustFS local / S3 on AWS")]
   bedrock["Claude on Amazon Bedrock\n(Mantle client, structured output)"]
 
-  walker -.-> web
-  office -.-> web
-  web -.->|"JSON + x-user-id"| routes
-  web -.->|"presigned PUT / GET"| s3
+  walker --> web
+  office --> web
+  web -->|"JSON + x-user-id"| routes
+  web -->|"presigned PUT / GET"| s3
 
   routes -->|"Drizzle"| pg
   routes -->|"presign · get bytes"| s3
   routes -->|"photo → type + condition"| bedrock
 
-  zod -.-> web
+  zod --> web
   zod --> routes
 
-  classDef planned stroke-dasharray: 5 5
-  class client,web planned
 ```
 
 ## 2. API internals
@@ -158,7 +156,8 @@ erDiagram
   FLOOR |o--o{ ASSET : "optionally on"
   ROOM |o--o{ ASSET : "optionally in"
   ASSET_TYPE ||--o{ ASSET : classifies
-  ASSET |o--o{ PHOTO : has
+  ASSET |o--o{ PHOTO : "photo of asset"
+  ROOM |o--o{ PHOTO : "photo of room"
   ASSET ||--o{ ASSET_EVENT : history
   APP_USER |o--o{ ROOM : walked
   APP_USER ||--o{ ASSET_EVENT : acted
@@ -171,6 +170,7 @@ erDiagram
     uuid id PK
     text name
     text district
+    text address "nullable, with contact_name/phone/email"
   }
   BUILDING {
     uuid id PK
@@ -215,7 +215,8 @@ erDiagram
   }
   PHOTO {
     uuid id PK
-    uuid asset_id FK "null until attached"
+    uuid asset_id FK "null until attached, or a room photo"
+    uuid room_id FK "set for photos of the room itself; never both"
     text s3_key "unique"
     jsonb ai_suggestion
   }
@@ -237,10 +238,12 @@ Location integrity lives in the database: `asset(floor_id, building_id)` referen
 ```mermaid
 flowchart LR
   subgraph local["Local (docker compose up)"]
+    lweb["web :5173\nvite dev"]
     lapi["api :3000\ntsx watch"]
     lpg[("postgres:16-alpine :5432")]
     lrust[("RustFS :9000\nbucket campus-walk-photos\nCORS from docker/s3-cors.json")]
     lnone["no BEDROCK_MODEL\n→ empty suggestion"]
+    lweb --> lapi
     lapi --> lpg & lrust
     lapi -.-> lnone
   end
@@ -275,15 +278,64 @@ flowchart LR
   class aws,cf,alb,rds,ps3,br,sm planned
 ```
 
-## 7. Endpoint map
+## 7. Web app (apps/web)
+
+```mermaid
+flowchart TB
+  subgraph entry["Entry"]
+    main["main.tsx\nQueryClient · BrowserRouter"]
+    app["App.tsx\nno user → WhoPage; else routes under /c/:campusId"]
+  end
+
+  subgraph data["Data layer (src/api)"]
+    client["client.ts\nfetch wrapper · x-user-id · ApiError(status, details)"]
+    queries["queries.ts\nTanStack Query hooks + invalidation"]
+    photos["photos.ts\nshrinkImage (canvas, ≤1600px JPEG) → POST /uploads → PUT → POST /photos"]
+    user["user.ts\nchosen user + recent types in localStorage"]
+  end
+
+  subgraph pages["Pages"]
+    who["WhoPage (stand-in login)"]
+    projects["ProjectsPage\ncampuses"]
+    campus["CampusPage\ncontact · progress · buildings"]
+    building["BuildingPage\ncontact · floor dropdown · rooms"]
+    systems["SystemsPage\nbuilding/floor-level assets"]
+    room["RoomPage\nwalked · room photos · assets (edit/copy/delete)"]
+    anew["AssetNewPage\nphoto → suggestion → fields"]
+    asset["AssetPage\nphoto · facts · move · copy · delete · history"]
+    aedit["AssetEditPage\nfields · photos · 409 handling"]
+    photo["PhotoPage\nfull size · subject · delete"]
+    summary["SummaryPage\noffice roll-up · CSV"]
+  end
+
+  subgraph comps["Components"]
+    fields["AssetFields\nTypePicker · Stepper · ConditionPicker"]
+    loc["LocationPicker · CopySheet"]
+    psec["PhotoSection"]
+    info["SiteInfoCard"]
+  end
+
+  main --> app --> pages
+  pages --> queries --> client
+  anew & aedit --> fields & psec
+  room --> psec
+  asset & room --> loc
+  campus & building --> info
+  psec --> photos --> client
+  client --> user
+```
+
+Field flow: pick a name once → projects → campus → building (floor dropdown) → room → **Add asset** (photo first; the suggestion pre-fills type, condition and note; the walker confirms) → **Mark room walked** → back to the building with the next unwalked room outlined. A stale save (409) shows "Updated by X while you were editing" with their changes and a button to load their version.
+
+## 8. Endpoint map
 
 | Area | Endpoints | Service |
 |---|---|---|
 | Identity | `GET/POST /users` | users.ts |
 | Browse | `GET /campuses`, `GET /campuses/:id/tree`, `GET /rooms/:id`, `GET /buildings/:id/systems`, `GET /asset-types` | campus.ts |
 | Walk | `POST/DELETE /rooms/:id/walked` | campus.ts |
-| Assets | `GET /assets/:id`, `POST /assets`, `PATCH /assets/:id`, `POST /assets/:id/move`, `DELETE /assets/:id` | assets.ts |
-| Photos | `POST /uploads`, `POST /photos`, `DELETE /photos/:id` | photos.ts |
+| Assets | `GET /assets/:id`, `POST /assets`, `PATCH /assets/:id`, `POST /assets/:id/move`, `POST /assets/:id/copy`, `DELETE /assets/:id` | assets.ts |
+| Photos | `POST /uploads`, `POST /photos` (asset, room, or unattached), `GET /photos/:id`, `DELETE /photos/:id` | photos.ts |
 | Office | `GET /campuses/:id/summary?buildingId=` | campus.ts |
 | CSV | `GET /campuses/:id/assets.csv`, `GET /campuses/:id/rooms.csv`, `POST /campuses/:id/rooms/import` | csv.ts |
 
