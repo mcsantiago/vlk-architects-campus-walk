@@ -31,7 +31,7 @@ services:
     volumes:
       - s3data:/data
 
-  # One-shot: wait for the S3 server, create the photo bucket, exit.
+  # One-shot: wait for the S3 server, create the photo bucket, allow browser uploads (CORS), exit.
   s3-init:
     image: amazon/aws-cli:latest
     depends_on:
@@ -40,9 +40,12 @@ services:
       AWS_ACCESS_KEY_ID: rustfs
       AWS_SECRET_ACCESS_KEY: rustfs12345
       AWS_REGION: us-east-1
+    volumes:
+      - ./docker/s3-cors.json:/s3-cors.json:ro
     entrypoint: >
       sh -c "until aws --endpoint-url http://s3:9000 s3 ls >/dev/null 2>&1; do sleep 1; done;
              aws --endpoint-url http://s3:9000 s3 mb s3://campus-walk-photos 2>/dev/null || true;
+             aws --endpoint-url http://s3:9000 s3api put-bucket-cors --bucket campus-walk-photos --cors-configuration file:///s3-cors.json || echo 'CORS not applied';
              aws --endpoint-url http://s3:9000 s3 ls"
 
 volumes:

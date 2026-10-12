@@ -36,6 +36,8 @@ export interface BuildingSpec {
   code: string;
   name: string;
   yearBuilt: number;
+  /** Who recorded this building's systems and any room assets without their own walk. */
+  walker: string;
   floors: FloorSpec[];
   /** Building-level assets, e.g. rooftop HVAC. */
   assets?: AssetSpec[];
@@ -119,6 +121,7 @@ export const CAMPUS: CampusSpec = {
       code: 'A',
       name: 'Main Classroom Building',
       yearBuilt: 1998,
+      walker: 'Dana R.',
       assets: [
         { type: 'Rooftop HVAC Unit', label: 'RTU-1', condition: 3, notes: 'Serves east wing. Compressor noisy.' },
         { type: 'Rooftop HVAC Unit', label: 'RTU-2', condition: 2, notes: 'Original 1998 unit, past service life.' },
@@ -223,6 +226,7 @@ export const CAMPUS: CampusSpec = {
       code: 'B',
       name: 'Gym & Cafeteria',
       yearBuilt: 2006,
+      walker: 'Priya S.',
       assets: [
         { type: 'Rooftop HVAC Unit', label: 'RTU-3', condition: 4 },
         { type: 'Rooftop HVAC Unit', label: 'RTU-4', condition: 4 },
@@ -284,6 +288,7 @@ export const CAMPUS: CampusSpec = {
       code: 'C',
       name: 'Administration',
       yearBuilt: 1998,
+      walker: 'Dana R.',
       assets: [
         { type: 'Rooftop HVAC Unit', label: 'RTU-5', condition: 3 },
         { type: 'Water Heater', condition: 4 },
@@ -333,6 +338,7 @@ export const CAMPUS: CampusSpec = {
       code: 'P',
       name: 'Portables',
       yearBuilt: 2015,
+      walker: 'Priya S.',
       floors: [
         {
           name: 'Floor 1',

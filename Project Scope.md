@@ -38,6 +38,7 @@ Make the on-site walk fast and the roll-up automatic. The architect opens a room
 - On-device detection (YOLO-World / open-vocabulary ONNX in the browser).
 - Gaussian splat room capture (WebGPU viewer).
 - Auth/roles, multiple campuses per architect, full offline-first sync with CRDTs.
+- **CouchDB + PouchDB** (considered 10/12 for offline + two-walker sync, honorable mention in the README's technology considerations). Rejected for this submission: it would discard the finished Postgres API with 2.5 days left, the office roll-ups are relational, location integrity lives in DB constraints, the brief grades "an API you wrote" (Pouch replication would replace most of it), sync conflicts still need a resolution UI, and neither AWS nor Azure offers managed CouchDB. The version-field 409 + IndexedDB outbox covers the same stretch items at a fraction of the cost.
 
 ## Data model
 
@@ -52,7 +53,13 @@ erDiagram
   ASSET_TYPE ||--o{ ASSET : classifies
   ASSET ||--o{ PHOTO : has
   ASSET ||--o{ ASSET_EVENT : history
+  APP_USER |o--o{ ROOM : walked
+  APP_USER ||--o{ ASSET_EVENT : acted
 
+  APP_USER {
+    uuid id PK
+    text name "unique, case-insensitive; no credentials"
+  }
   CAMPUS {
     uuid id PK
     text name
@@ -78,7 +85,7 @@ erDiagram
     text name
     text room_type "classroom, office, restroom, ..."
     timestamptz walked_at "null = not walked"
-    text walked_by
+    uuid walked_by_id FK "nullable; set together with walked_at"
   }
   ASSET_TYPE {
     uuid id PK
@@ -114,8 +121,8 @@ erDiagram
     text kind "created | moved | updated | deleted"
     jsonb before
     jsonb after
-    text actor
-    timestamptz at
+    uuid changed_by FK
+    timestamptz changed_at
   }
 ```
 
@@ -158,24 +165,37 @@ Usability targets: phone-first, one-handed, big tap targets, recently used asset
 
 ## API sketch (REST, JSON, zod-validated)
 ```
+GET    /campuses                     list
 GET    /campuses/:id/tree            buildings → floors → rooms (+ walked, asset counts)
-GET    /rooms/:id                    room + assets
-GET    /buildings/:id/assets?level=building|floor
-POST   /assets
-PATCH  /assets/:id                   body includes version; 409 on mismatch
-POST   /assets/:id/move              { building_id, floor_id?, room_id?, version }
-DELETE /assets/:id                   soft delete, requires version
-POST   /rooms/:id/walked   DELETE /rooms/:id/walked
-POST   /uploads                      → presigned S3 PUT + key
-POST   /photos                       { asset_id?, s3_key } → runs AI suggestion
-GET    /campuses/:id/summary?building_id=
-GET    /campuses/:id/export.csv      POST /campuses/:id/rooms/import
+GET    /campuses/:id/summary?buildingId=
+GET    /rooms/:id                    room + ancestry + assets
+POST   /rooms/:id/walked             mark walked by X-Walker;  DELETE /rooms/:id/walked clears
+GET    /buildings/:id/systems        building- and floor-level assets (no room)
+GET    /assets/:id                   asset + event history
+POST   /assets                       { roomId | floorId | buildingId, assetTypeId, quantity, condition, label?, notes? }
+                                     server resolves the levels above the one given
+PATCH  /assets/:id                   body includes version; 409 with current record on mismatch
+POST   /assets/:id/move              { roomId | floorId | buildingId, version }
+DELETE /assets/:id                   { version }; soft delete
 GET    /asset-types
+POST   /uploads                      { contentType } → { key, url (presigned PUT), expiresInSeconds }
+POST   /photos                       { s3Key, assetId? } → photo { url, suggestion }; runs the AI suggestion
+                                     photos taken before the asset exists are attached via POST /assets { photoIds }
+DELETE /photos/:id
+GET    /campuses/:id/assets.csv      GET /campuses/:id/rooms.csv (doubles as the import template)
+POST   /campuses/:id/rooms/import    body = CSV; all-or-nothing, 400 lists row errors with line numbers
+
+GET    /users                       POST /users { name } find-or-create (case-insensitive)
+
+Identity: the client picks a user (`POST /users`) once and sends `X-User-Id` on writes; it becomes
+the event's changed_by and the room's walker. Writes without a known user get 401. No credentials or
+roles yet: authentication and RBAC would hang off `app_user` later and are out of scope.
+Errors: `{ error, details }`; zod issues in details for 400, the current record for 409.
 ```
 
 ## Architecture
 - **Monorepo (pnpm):** `apps/web` (React + Vite PWA, TanStack Query), `apps/api` (Hono on Node), `packages/shared` (zod schemas + types shared by the web app and API), `infra` (AWS CDK, TS).
-- **DB:** Postgres + Drizzle (migrations + seed script).
+- **DB:** Postgres + Drizzle (migrations + seed script). CouchDB/PouchDB was weighed for offline sync and set aside (see Cut).
 - **Local:** `docker compose up` → Postgres + RustFS (S3-compatible; MinIO's public images were withdrawn). No Docker? `DATABASE_URL=pglite://.data/pg` runs embedded Postgres. The AI suggestion is stubbed when AWS credentials are absent.
 - **AWS:** CloudFront + S3 (web) · ECS Fargate behind an ALB (api) · RDS Postgres (t4g.micro) · S3 (photos) · Bedrock (Claude vision) via the task role · Secrets Manager for the DB credentials.
 

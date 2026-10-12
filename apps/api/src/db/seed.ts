@@ -4,21 +4,34 @@ import { createDb, type Db } from './client.ts';
 import * as s from './schema.ts';
 import { ASSET_TYPES, CAMPUS, type AssetSpec, type CampusSpec } from './seed-data.ts';
 
-const SEED_ACTOR = 'seed';
 const DAY_MS = 86_400_000;
 
+/** Every person named as a walker anywhere in the spec. */
+function walkerNames(spec: CampusSpec): string[] {
+  const names = new Set<string>();
+  for (const b of spec.buildings) {
+    names.add(b.walker);
+    for (const f of b.floors) for (const r of f.rooms) if (r.walked) names.add(r.walked.by);
+  }
+  return [...names];
+}
+
 /**
- * Loads a campus spec. Returns the campus id so tests can seed the same fixture.
- * Every asset gets a `created` event so the audit log convention holds for seeded rows too.
+ * Loads a campus spec and returns the campus id so tests can seed the same fixture.
+ * Every asset gets a `created` event authored by the walker who recorded it, so the audit log
+ * convention holds for seeded rows too.
  */
 export async function seedCampus(db: Db, spec: CampusSpec, now = new Date()) {
-  const typeIds = new Map<string, string>();
-  const typeRows = await db.insert(s.assetType).values(ASSET_TYPES).onConflictDoNothing().returning();
-  for (const t of typeRows) typeIds.set(t.name, t.id);
-  // Asset types already present (re-seeding) come back empty from the insert.
-  if (typeIds.size < ASSET_TYPES.length) {
-    for (const t of await db.select().from(s.assetType)) typeIds.set(t.name, t.id);
-  }
+  await db.insert(s.assetType).values(ASSET_TYPES).onConflictDoNothing();
+  const typeIds = new Map((await db.select().from(s.assetType)).map((t) => [t.name, t.id]));
+
+  await db.insert(s.user).values(walkerNames(spec).map((name) => ({ name }))).onConflictDoNothing();
+  const userIds = new Map((await db.select().from(s.user)).map((u) => [u.name, u.id]));
+  const userId = (name: string) => {
+    const id = userIds.get(name);
+    if (!id) throw new Error(`seed: unknown walker "${name}"`);
+    return id;
+  };
 
   const [campusRow] = await db
     .insert(s.campus)
@@ -29,6 +42,7 @@ export async function seedCampus(db: Db, spec: CampusSpec, now = new Date()) {
   const insertAssets = async (
     specs: AssetSpec[] | undefined,
     loc: { buildingId: string; floorId?: string; roomId?: string },
+    actorId: string,
   ) => {
     if (!specs?.length) return;
     const rows = await db
@@ -48,9 +62,9 @@ export async function seedCampus(db: Db, spec: CampusSpec, now = new Date()) {
         }),
       )
       .returning();
-    await db.insert(s.assetEvent).values(
-      rows.map((r) => ({ assetId: r.id, kind: 'created' as const, after: r, actor: SEED_ACTOR })),
-    );
+    await db
+      .insert(s.assetEvent)
+      .values(rows.map((r) => ({ assetId: r.id, kind: 'created' as const, after: r, changedBy: actorId })));
   };
 
   for (const b of spec.buildings) {
@@ -59,15 +73,16 @@ export async function seedCampus(db: Db, spec: CampusSpec, now = new Date()) {
       .values({ campusId, code: b.code, name: b.name, yearBuilt: b.yearBuilt })
       .returning();
     const buildingId = bRow!.id;
-    await insertAssets(b.assets, { buildingId });
+    const buildingWalker = userId(b.walker);
+    await insertAssets(b.assets, { buildingId }, buildingWalker);
 
     for (const f of b.floors) {
       const [fRow] = await db.insert(s.floor).values({ buildingId, name: f.name, level: f.level }).returning();
       const floorId = fRow!.id;
-      await insertAssets(f.assets, { buildingId, floorId });
+      await insertAssets(f.assets, { buildingId, floorId }, buildingWalker);
 
       for (const r of f.rooms) {
-        const walkedAt = r.walked ? new Date(now.getTime() - r.walked.daysAgo * DAY_MS) : null;
+        const walkedById = r.walked ? userId(r.walked.by) : null;
         const [rRow] = await db
           .insert(s.room)
           .values({
@@ -75,11 +90,11 @@ export async function seedCampus(db: Db, spec: CampusSpec, now = new Date()) {
             number: r.number,
             name: r.name,
             roomType: r.type,
-            walkedAt,
-            walkedBy: r.walked?.by ?? null,
+            walkedAt: r.walked ? new Date(now.getTime() - r.walked.daysAgo * DAY_MS) : null,
+            walkedById,
           })
           .returning();
-        await insertAssets(r.assets, { buildingId, floorId, roomId: rRow!.id });
+        await insertAssets(r.assets, { buildingId, floorId, roomId: rRow!.id }, walkedById ?? buildingWalker);
       }
     }
   }
@@ -92,7 +107,7 @@ async function main() {
   await handle.migrate();
   const { db } = handle;
 
-  const existing = await db.select({ id: s.campus.id, name: s.campus.name }).from(s.campus);
+  const existing = await db.select({ id: s.campus.id }).from(s.campus);
   if (existing.length) {
     if (process.env.RESET !== '1') {
       console.log(`database already has ${existing.length} campus(es); run with RESET=1 to wipe and reseed`);
@@ -101,6 +116,7 @@ async function main() {
     }
     await db.delete(s.campus); // cascades to buildings, floors, rooms, assets, events, photos
     await db.delete(s.assetType);
+    await db.delete(s.user);
   }
 
   const campusId = await seedCampus(db, CAMPUS);

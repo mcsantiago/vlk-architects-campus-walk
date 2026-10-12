@@ -1,5 +1,5 @@
 {
-  "id": "f274989a-7666-4405-a00d-7023f198b4b9",
+  "id": "ca661672-0f7d-499f-a4d4-4666a3bae040",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -238,14 +238,14 @@
           "primaryKey": false,
           "notNull": false
         },
-        "actor": {
-          "name": "actor",
-          "type": "text",
+        "changed_by": {
+          "name": "changed_by",
+          "type": "uuid",
           "primaryKey": false,
           "notNull": true
         },
-        "at": {
-          "name": "at",
+        "changed_at": {
+          "name": "changed_at",
           "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
@@ -263,7 +263,7 @@
               "nulls": "last"
             },
             {
-              "expression": "at",
+              "expression": "changed_at",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -287,6 +287,19 @@
             "id"
           ],
           "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "asset_event_changed_by_app_user_id_fk": {
+          "name": "asset_event_changed_by_app_user_id_fk",
+          "tableFrom": "asset_event",
+          "tableTo": "app_user",
+          "columnsFrom": [
+            "changed_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
           "onUpdate": "no action"
         }
       },
@@ -660,9 +673,9 @@
           "primaryKey": false,
           "notNull": false
         },
-        "walked_by": {
-          "name": "walked_by",
-          "type": "text",
+        "walked_by_id": {
+          "name": "walked_by_id",
+          "type": "uuid",
           "primaryKey": false,
           "notNull": false
         },
@@ -687,6 +700,19 @@
             "id"
           ],
           "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "room_walked_by_id_app_user_id_fk": {
+          "name": "room_walked_by_id_app_user_id_fk",
+          "tableFrom": "room",
+          "tableTo": "app_user",
+          "columnsFrom": [
+            "walked_by_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
           "onUpdate": "no action"
         }
       },
@@ -713,9 +739,58 @@
       "checkConstraints": {
         "room_walked_by_ck": {
           "name": "room_walked_by_ck",
-          "value": "(\"room\".\"walked_at\" IS NULL) = (\"room\".\"walked_by\" IS NULL)"
+          "value": "(\"room\".\"walked_at\" IS NULL) = (\"room\".\"walked_by_id\" IS NULL)"
         }
       },
+      "isRLSEnabled": false
+    },
+    "public.app_user": {
+      "name": "app_user",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "app_user_name_lower_uq": {
+          "name": "app_user_name_lower_uq",
+          "columns": [
+            {
+              "expression": "lower(\"name\")",
+              "asc": true,
+              "isExpression": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
       "isRLSEnabled": false
     }
   },

@@ -23,8 +23,8 @@ CREATE TABLE "asset_event" (
 	"kind" text NOT NULL,
 	"before" jsonb,
 	"after" jsonb,
-	"actor" text NOT NULL,
-	"at" timestamp with time zone DEFAULT now() NOT NULL
+	"changed_by" uuid NOT NULL,
+	"changed_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE "asset_type" (
@@ -79,11 +79,17 @@ CREATE TABLE "room" (
 	"name" text NOT NULL,
 	"room_type" text NOT NULL,
 	"walked_at" timestamp with time zone,
-	"walked_by" text,
+	"walked_by_id" uuid,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "room_floor_number_uq" UNIQUE("floor_id","number"),
 	CONSTRAINT "room_id_floor_uq" UNIQUE("id","floor_id"),
-	CONSTRAINT "room_walked_by_ck" CHECK (("room"."walked_at" IS NULL) = ("room"."walked_by" IS NULL))
+	CONSTRAINT "room_walked_by_ck" CHECK (("room"."walked_at" IS NULL) = ("room"."walked_by_id" IS NULL))
+);
+--> statement-breakpoint
+CREATE TABLE "app_user" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"name" text NOT NULL,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
 ALTER TABLE "asset" ADD CONSTRAINT "asset_asset_type_id_asset_type_id_fk" FOREIGN KEY ("asset_type_id") REFERENCES "public"."asset_type"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
@@ -91,11 +97,14 @@ ALTER TABLE "asset" ADD CONSTRAINT "asset_building_fk" FOREIGN KEY ("building_id
 ALTER TABLE "asset" ADD CONSTRAINT "asset_floor_in_building_fk" FOREIGN KEY ("floor_id","building_id") REFERENCES "public"."floor"("id","building_id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "asset" ADD CONSTRAINT "asset_room_on_floor_fk" FOREIGN KEY ("room_id","floor_id") REFERENCES "public"."room"("id","floor_id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "asset_event" ADD CONSTRAINT "asset_event_asset_id_asset_id_fk" FOREIGN KEY ("asset_id") REFERENCES "public"."asset"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "asset_event" ADD CONSTRAINT "asset_event_changed_by_app_user_id_fk" FOREIGN KEY ("changed_by") REFERENCES "public"."app_user"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "building" ADD CONSTRAINT "building_campus_id_campus_id_fk" FOREIGN KEY ("campus_id") REFERENCES "public"."campus"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "floor" ADD CONSTRAINT "floor_building_id_building_id_fk" FOREIGN KEY ("building_id") REFERENCES "public"."building"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "photo" ADD CONSTRAINT "photo_asset_id_asset_id_fk" FOREIGN KEY ("asset_id") REFERENCES "public"."asset"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "room" ADD CONSTRAINT "room_floor_id_floor_id_fk" FOREIGN KEY ("floor_id") REFERENCES "public"."floor"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "room" ADD CONSTRAINT "room_walked_by_id_app_user_id_fk" FOREIGN KEY ("walked_by_id") REFERENCES "public"."app_user"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX "asset_building_idx" ON "asset" USING btree ("building_id") WHERE "asset"."deleted_at" IS NULL;--> statement-breakpoint
 CREATE INDEX "asset_room_idx" ON "asset" USING btree ("room_id") WHERE "asset"."deleted_at" IS NULL;--> statement-breakpoint
-CREATE INDEX "asset_event_asset_idx" ON "asset_event" USING btree ("asset_id","at");--> statement-breakpoint
-CREATE INDEX "photo_asset_idx" ON "photo" USING btree ("asset_id");
+CREATE INDEX "asset_event_asset_idx" ON "asset_event" USING btree ("asset_id","changed_at");--> statement-breakpoint
+CREATE INDEX "photo_asset_idx" ON "photo" USING btree ("asset_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "app_user_name_lower_uq" ON "app_user" USING btree (lower("name"));

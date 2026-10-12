@@ -10,6 +10,7 @@ import {
   text,
   timestamp,
   unique,
+  uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
 import { ASSET_CATEGORIES } from '@campus-walk/shared';
@@ -17,6 +18,21 @@ import { ASSET_CATEGORIES } from '@campus-walk/shared';
 const id = () => uuid('id').primaryKey().defaultRandom();
 const createdAt = () => timestamp('created_at', { withTimezone: true }).notNull().defaultNow();
 const updatedAt = () => timestamp('updated_at', { withTimezone: true }).notNull().defaultNow();
+
+/**
+ * A person who walks campuses. Identity only, no credentials: the client picks a user and sends
+ * its id on each write. Authentication and roles are a later concern and would hang off this table.
+ * Named app_user because `user` is reserved in Postgres.
+ */
+export const user = pgTable(
+  'app_user',
+  {
+    id: id(),
+    name: text('name').notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex('app_user_name_lower_uq').on(sql`lower(${t.name})`)],
+);
 
 export const campus = pgTable('campus', {
   id: id(),
@@ -71,14 +87,14 @@ export const room = pgTable(
     roomType: text('room_type').notNull(),
     /** Null until a walker marks the room complete. A room with zero assets can still be walked. */
     walkedAt: timestamp('walked_at', { withTimezone: true }),
-    walkedBy: text('walked_by'),
+    walkedById: uuid('walked_by_id').references(() => user.id),
     createdAt: createdAt(),
   },
   (t) => [
     unique('room_floor_number_uq').on(t.floorId, t.number),
     // Target for asset's composite FK (room_id, floor_id).
     unique('room_id_floor_uq').on(t.id, t.floorId),
-    check('room_walked_by_ck', sql`(${t.walkedAt} IS NULL) = (${t.walkedBy} IS NULL)`),
+    check('room_walked_by_ck', sql`(${t.walkedAt} IS NULL) = (${t.walkedById} IS NULL)`),
   ],
 );
 
@@ -176,8 +192,11 @@ export const assetEvent = pgTable(
     kind: text('kind', { enum: ASSET_EVENT_KINDS }).notNull(),
     before: jsonb('before'),
     after: jsonb('after'),
-    actor: text('actor').notNull(),
-    at: timestamp('at', { withTimezone: true }).notNull().defaultNow(),
+    /** Who made the change: the x-user-id on the request. */
+    changedBy: uuid('changed_by')
+      .notNull()
+      .references(() => user.id),
+    changedAt: timestamp('changed_at', { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [index('asset_event_asset_idx').on(t.assetId, t.at)],
+  (t) => [index('asset_event_asset_idx').on(t.assetId, t.changedAt)],
 );
