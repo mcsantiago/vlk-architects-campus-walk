@@ -33,7 +33,7 @@ No Docker? Set `DATABASE_URL=pglite://.data/pg` in `.env` for embedded Postgres;
 
 The AI suggestion is off unless `BEDROCK_MODEL` is set (see `.env.example`). It uses the default AWS credential chain and a Bedrock-enabled region. Everything else works without it; the add-asset form just opens empty.
 
-To use the app from a phone on the same network, open the LAN URL Vite prints and set `VITE_API_URL=http://<your-ip>:3000` when starting the web app so the phone reaches the API.
+**From a phone on the same Wi-Fi:** open the LAN URL Vite prints (`http://<laptop-ip>:5173`). Nothing else to set: the web app calls the API at `/api` on its own origin, Vite proxies that to the API, and the API presigns photo URLs for whatever host the request came from, so the phone's uploads go to `http://<laptop-ip>:9000` rather than `localhost`. The camera needs a secure context on iOS; `localhost` and plain `http://` on a LAN address both work in Safari for the file picker, but if the camera option is missing, tunnel it (`npx localtunnel --port 5173`) and set `S3_PUBLIC_ENDPOINT` to a tunnel for port 9000.
 
 ## Walk through it
 
@@ -106,7 +106,7 @@ docs/            architecture diagrams, API contract
 ## Testing
 
 ```bash
-npm test                                   # 40 API tests on in-memory PGlite, ~3 s
+npm test                                   # 43 API tests on in-memory PGlite, ~3 s
 TEST_DATABASE_URL=postgres://campus:campus@localhost:5432/campus_walk npm test   # same tests on Postgres
 npm run typecheck
 ```

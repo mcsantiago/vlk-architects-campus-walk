@@ -1,6 +1,6 @@
 # Campus Walk — API Contract
 
-Base URL locally: `http://localhost:3000`. All bodies and responses are JSON unless noted. Status as of 2026-10-12; every endpoint below (24) is implemented and covered by `apps/api/test/*.test.ts`.
+Base URL locally: `http://localhost:3000` directly, or `/api` on the web app's origin (the Vite dev server proxies it, which is how a phone on the LAN reaches it). All bodies and responses are JSON unless noted. Status as of 2026-10-12; every endpoint below (24) is implemented and covered by `apps/api/test/*.test.ts`.
 
 ## Conventions
 

@@ -6,6 +6,7 @@ import { ApiError } from '../api/client';
 import { keys, useAsset, useDeleteAsset, useMoveAsset, useTree } from '../api/queries';
 import { locationBody } from '../components/AssetFields';
 import { ConditionDot } from '../components/ConditionPicker';
+import { useConfirm } from '../components/Confirm';
 import { CopySheet } from '../components/CopySheet';
 import { LocationPicker, describeLocation, type Location } from '../components/LocationPicker';
 import { ErrorNotice, Loading, Page, formatWhen } from '../components/Page';
@@ -23,6 +24,7 @@ export function AssetPage() {
   const [copying, setCopying] = useState<AssetView | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
   const sheet = useRef<HTMLDialogElement>(null);
+  const confirm = useConfirm();
 
   const a = asset.data;
   const back = a ? (a.roomId ? `/c/${campusId}/rooms/${a.roomId}` : `/c/${campusId}/buildings/${a.buildingId}/systems`) : `/c/${campusId}`;
@@ -60,7 +62,7 @@ export function AssetPage() {
 
   async function doDelete() {
     if (!a) return;
-    if (!confirm(`Delete ${title}${a.label ? ` (${a.label})` : ''}? Its history is kept.`)) return;
+    if (!(await confirm({ title: `Delete ${title}${a.label ? ` (${a.label})` : ''}?`, detail: 'It leaves every list and roll-up. Its history is kept.', confirmLabel: 'Delete asset', danger: true }))) return;
     try {
       await remove.mutateAsync(a.version);
       navigate(back);

@@ -1,8 +1,11 @@
 import { USER_HEADER, type ApiErrorBody } from '@campus-walk/shared';
 import { currentUser, setCurrentUser } from '../user';
 
-/** Where the API lives. Empty means same origin (the deployed CloudFront routes /api there). */
-export const API_URL: string = (import.meta.env.VITE_API_URL as string | undefined) ?? 'http://localhost:3000';
+/**
+ * Where the API lives. Default is /api on this origin: the Vite dev server proxies it to the
+ * API, and the deployment routes it at the edge. VITE_API_URL overrides it at build time.
+ */
+export const API_URL: string = ((import.meta.env.VITE_API_URL as string | undefined) ?? '/api').replace(/\/$/, '');
 
 export class ApiError extends Error {
   constructor(

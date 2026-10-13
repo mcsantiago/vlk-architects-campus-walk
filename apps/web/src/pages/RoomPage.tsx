@@ -1,10 +1,11 @@
 import { useQueryClient } from '@tanstack/react-query';
-import type { AssetWithPhotos } from '@campus-walk/shared';
+import type { AssetWithPhotos, RoomDetail } from '@campus-walk/shared';
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { api, describeError } from '../api/client';
 import { keys, useDeletePhoto, useRoom, useSetWalked, useTree } from '../api/queries';
 import { AssetList } from '../components/AssetRow';
+import { useConfirm } from '../components/Confirm';
 import { CopySheet } from '../components/CopySheet';
 import { describeLocation } from '../components/LocationPicker';
 import { ErrorNotice, Loading, Page, formatWhen } from '../components/Page';
@@ -19,6 +20,7 @@ export function RoomPage() {
   const tree = useTree(campusId);
   const walked = useSetWalked(roomId);
   const removePhoto = useDeletePhoto();
+  const confirm = useConfirm();
   const [copying, setCopying] = useState<AssetWithPhotos | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
@@ -45,10 +47,13 @@ export function RoomPage() {
   }
 
   async function deleteAsset(a: AssetWithPhotos) {
-    if (!confirm(`Delete ${a.quantity > 1 ? `${a.quantity} × ` : ''}${a.assetType.name}${a.label ? ` (${a.label})` : ''} from this room? Its history is kept.`)) return;
+    const name = `${a.quantity > 1 ? `${a.quantity} × ` : ''}${a.assetType.name}${a.label ? ` (${a.label})` : ''}`;
+    if (!(await confirm({ title: `Delete ${name}?`, detail: 'It leaves this room and every roll-up. Its history is kept.', confirmLabel: 'Delete asset', danger: true }))) return;
     setProblem(null);
     try {
       await api<void>(`/assets/${a.id}`, { method: 'DELETE', body: { version: a.version } });
+      // Drop the row at once; the refetch below confirms it.
+      qc.setQueryData<RoomDetail>(keys.room(roomId), (old) => old && { ...old, assets: old.assets.filter((x) => x.id !== a.id) });
       await Promise.all([refreshRoom(), qc.invalidateQueries({ queryKey: ['tree'] }), qc.invalidateQueries({ queryKey: ['summary'] })]);
     } catch (e) {
       setProblem(describeError(e));
@@ -94,8 +99,8 @@ export function RoomPage() {
             photos={r.photos}
             subject={{ roomId }}
             onAdded={refreshRoom}
-            onRemove={(p) => {
-              if (confirm('Delete this photo of the room?')) removePhoto.mutate(p.id);
+            onRemove={async (p) => {
+              if (await confirm({ title: 'Delete this photo of the room?', confirmLabel: 'Delete photo', danger: true })) removePhoto.mutate(p.id);
             }}
             linkTo={(p) => `/c/${campusId}/photos/${p.id}`}
           />

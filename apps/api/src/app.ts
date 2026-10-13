@@ -46,7 +46,8 @@ export function createApp({ db, storage = new MemoryPhotoStorage(), suggester = 
   app.use(async (c, next) => {
     const header = c.req.header(USER_HEADER)?.trim();
     c.set('db', db);
-    c.set('storage', storage);
+    // Presigned photo URLs must be reachable by whoever is asking (a phone on the LAN, not localhost).
+    c.set('storage', storage.forViewer(c.req.header('x-forwarded-host') ?? c.req.header('host')));
     c.set('suggester', suggester);
     c.set('userId', header && z.uuid().safeParse(header).success ? header : null);
     await next();

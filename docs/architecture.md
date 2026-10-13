@@ -238,10 +238,10 @@ Location integrity lives in the database: `asset(floor_id, building_id)` referen
 ```mermaid
 flowchart LR
   subgraph local["Local (docker compose up)"]
-    lweb["web :5173\nvite dev"]
+    lweb["web :5173\nvite dev · proxies /api → api"]
     lapi["api :3000\ntsx watch"]
     lpg[("postgres:16-alpine :5432")]
-    lrust[("RustFS :9000\nbucket campus-walk-photos\nCORS from docker/s3-cors.json")]
+    lrust[("RustFS :9000\nbucket campus-walk-photos\nCORS from docker/s3-cors.json\npresigned for the requesting host")]
     lnone["no BEDROCK_MODEL\n→ empty suggestion"]
     lweb --> lapi
     lapi --> lpg & lrust

@@ -5,6 +5,7 @@ import { useNavigate, useParams } from 'react-router';
 import { ApiError } from '../api/client';
 import { keys, useAsset, useAssetTypes, useDeletePhoto, useTree, useUpdateAsset } from '../api/queries';
 import { AssetFields, type AssetFieldValues } from '../components/AssetFields';
+import { useConfirm } from '../components/Confirm';
 import { describeLocation } from '../components/LocationPicker';
 import { ErrorNotice, Loading, Page } from '../components/Page';
 import { PhotoSection } from '../components/PhotoSection';
@@ -28,6 +29,7 @@ export function AssetEditPage() {
   const types = useAssetTypes();
   const update = useUpdateAsset(assetId);
   const removePhoto = useDeletePhoto(assetId);
+  const confirm = useConfirm();
 
   const [fields, setFields] = useState<AssetFieldValues | null>(null);
   const [conflict, setConflict] = useState<AssetView | null>(null);
@@ -60,8 +62,9 @@ export function AssetEditPage() {
       navigate(back);
     } catch (e) {
       if (e instanceof ApiError && e.status === 409) {
+        // Refetch first so the notice can name who changed it (from the asset's history).
+        await qc.invalidateQueries({ queryKey: keys.asset(assetId) });
         setConflict(e.current as AssetView);
-        void qc.invalidateQueries({ queryKey: keys.asset(assetId) });
       } else throw e;
     }
   }
@@ -98,8 +101,8 @@ export function AssetEditPage() {
             photos={a.photos}
             subject={{ assetId: a.id }}
             onAdded={() => qc.invalidateQueries({ queryKey: keys.asset(assetId) })}
-            onRemove={(p) => {
-              if (confirm('Delete this photo?')) removePhoto.mutate(p.id);
+            onRemove={async (p) => {
+              if (await confirm({ title: 'Delete this photo?', confirmLabel: 'Delete photo', danger: true })) removePhoto.mutate(p.id);
             }}
             linkTo={(p) => `/c/${campusId}/photos/${p.id}`}
           />

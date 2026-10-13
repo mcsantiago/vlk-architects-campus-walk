@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { Link } from 'react-router';
 import { setCurrentUser, useCurrentUser } from '../user';
 import { describeError } from '../api/client';
+import { useConfirm } from './Confirm';
 
 interface PageProps {
   title: string;
@@ -13,6 +14,7 @@ interface PageProps {
 
 export function Page({ title, subtitle, back, children }: PageProps) {
   const user = useCurrentUser();
+  const confirm = useConfirm();
   return (
     <div className="shell">
       <header className="topbar">
@@ -32,8 +34,8 @@ export function Page({ title, subtitle, back, children }: PageProps) {
             <button
               className="userchip"
               title="Switch walker"
-              onClick={() => {
-                if (confirm(`Stop walking as ${user.name}?`)) setCurrentUser(null);
+              onClick={async () => {
+                if (await confirm({ title: `Stop walking as ${user.name}?`, confirmLabel: 'Switch walker' })) setCurrentUser(null);
               }}
             >
               {user.name}

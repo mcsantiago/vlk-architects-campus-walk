@@ -1,6 +1,7 @@
 import { conditionLabel } from '@campus-walk/shared';
 import { Link, useNavigate, useParams } from 'react-router';
 import { useDeletePhoto, usePhoto } from '../api/queries';
+import { useConfirm } from '../components/Confirm';
 import { ErrorNotice, Loading, Page, formatWhen } from '../components/Page';
 import { SuggestionNotice } from '../components/SuggestionNotice';
 
@@ -10,6 +11,7 @@ export function PhotoPage() {
   const navigate = useNavigate();
   const photo = usePhoto(photoId);
   const remove = useDeletePhoto(photo.data?.assetId ?? undefined);
+  const confirm = useConfirm();
 
   if (photo.isPending)
     return (
@@ -36,7 +38,7 @@ export function PhotoPage() {
       : 'Unattached photo';
 
   async function doDelete() {
-    if (!confirm('Delete this photo? This cannot be undone.')) return;
+    if (!(await confirm({ title: 'Delete this photo?', detail: 'This cannot be undone.', confirmLabel: 'Delete photo', danger: true }))) return;
     await remove.mutateAsync(p.id);
     navigate(back);
   }
