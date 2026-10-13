@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { ROOM_TYPES } from './domain.ts';
+import { ASSET_CATEGORIES, ROOM_TYPES } from './domain.ts';
 
 /** Request schemas shared by the API (validation) and the web app (form types). */
 
@@ -14,6 +14,14 @@ export const USER_HEADER = 'x-user-id';
 
 export const CreateUserInput = z.object({ name: z.string().trim().min(1).max(60) });
 export type CreateUserInput = z.infer<typeof CreateUserInput>;
+
+/** A walker can add a type from the field; names are matched case-insensitively so "kiln" finds "Kiln". */
+export const CreateAssetTypeInput = z.object({
+  name: z.string().trim().min(1).max(60),
+  category: z.enum(ASSET_CATEGORIES),
+  trackedIndividually: z.boolean(),
+});
+export type CreateAssetTypeInput = z.infer<typeof CreateAssetTypeInput>;
 
 /**
  * Where an asset lives. Any subset may be sent; the server resolves the rest

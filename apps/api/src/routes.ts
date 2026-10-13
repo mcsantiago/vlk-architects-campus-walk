@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import {
   CopyAssetInput,
   CreateAssetInput,
+  CreateAssetTypeInput,
   CreatePhotoInput,
   CreateUploadInput,
   CreateUserInput,
@@ -24,6 +25,7 @@ import {
 } from './services/campus.ts';
 import { exportAssetsCsv, exportRoomsCsv, importRoomsCsv } from './services/csv.ts';
 import { createPhoto, createUpload, deletePhoto, getPhoto, photosByRoom, withPhotos } from './services/photos.ts';
+import { findOrCreateAssetType, listAssetTypes } from './services/types.ts';
 import { findOrCreateUser, listUsers } from './services/users.ts';
 
 export const routes = new Hono<Env>();
@@ -57,9 +59,12 @@ routes.post('/campuses/:id/rooms/import', async (c) => {
   return c.json(await importRoomsCsv(c.get('db'), idParam(c), text));
 });
 
-routes.get('/asset-types', async (c) =>
-  c.json(await c.get('db').select().from(s.assetType).orderBy(s.assetType.category, s.assetType.name)),
-);
+routes.get('/asset-types', async (c) => c.json(await listAssetTypes(c.get('db'))));
+routes.post('/asset-types', async (c) => {
+  await requireUser(c);
+  const input = await parseBody(c, CreateAssetTypeInput);
+  return c.json(await findOrCreateAssetType(c.get('db'), input), 201);
+});
 
 routes.get('/buildings/:id/systems', async (c) => {
   const db = c.get('db');

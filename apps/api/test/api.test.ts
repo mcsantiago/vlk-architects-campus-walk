@@ -316,3 +316,26 @@ describe('copy', () => {
     expect((await call('POST', `/assets/${source.id}/copy`, { roomId: room('106').id }, null)).status).toBe(401);
   });
 });
+
+describe('asset types', () => {
+  it('lets a walker add a type from the field, once, and use it straight away', async () => {
+    const before = (await call('GET', '/asset-types')).body.length;
+    const kiln = await call('POST', '/asset-types', { name: '  Kiln ', category: 'equipment', trackedIndividually: true });
+    expect(kiln.status).toBe(201);
+    expect(kiln.body).toMatchObject({ name: 'Kiln', category: 'equipment', trackedIndividually: true });
+
+    // same name in another case finds it; the stored category wins over what was sent
+    const again = await call('POST', '/asset-types', { name: 'kiln', category: 'furniture', trackedIndividually: false });
+    expect(again.status).toBe(201);
+    expect(again.body).toEqual(kiln.body);
+    expect((await call('GET', '/asset-types')).body.length).toBe(before + 1);
+
+    const asset = await call('POST', '/assets', { roomId: room('104').id, assetTypeId: kiln.body.id, condition: 4 });
+    expect(asset.status).toBe(201);
+    expect(asset.body.assetType).toEqual(kiln.body);
+
+    expect((await call('POST', '/asset-types', { name: '', category: 'equipment', trackedIndividually: true })).status).toBe(400);
+    expect((await call('POST', '/asset-types', { name: 'Forge', category: 'tools', trackedIndividually: true })).status).toBe(400);
+    expect((await call('POST', '/asset-types', { name: 'Forge', category: 'equipment', trackedIndividually: true }, null)).status).toBe(401);
+  });
+});

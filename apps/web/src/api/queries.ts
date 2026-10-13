@@ -10,6 +10,7 @@ import type {
   CampusTree,
   CampusView,
   CreateAssetInput,
+  CreateAssetTypeInput,
   MoveAssetInput,
   RoomDetail,
   RoomHeader,
@@ -62,6 +63,18 @@ function useInvalidateAssets() {
       qc.invalidateQueries({ queryKey: ['summary'] }),
       assetId ? qc.invalidateQueries({ queryKey: keys.asset(assetId) }) : Promise.resolve(),
     ]);
+}
+
+/** Adds a type to the shared catalogue (or finds it by name) and drops it into the cached list at once. */
+export function useCreateAssetType() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreateAssetTypeInput) => api<AssetTypeView>('/asset-types', { method: 'POST', body: input }),
+    onSuccess: (type) => {
+      qc.setQueryData<AssetTypeView[]>(keys.assetTypes, (old) => old && (old.some((t) => t.id === type.id) ? old : [...old, type]));
+      void qc.invalidateQueries({ queryKey: keys.assetTypes });
+    },
+  });
 }
 
 export function useCreateAsset() {

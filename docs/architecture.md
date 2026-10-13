@@ -332,7 +332,8 @@ Field flow: pick a name once → projects → campus → building (floor dropdow
 | Area | Endpoints | Service |
 |---|---|---|
 | Identity | `GET/POST /users` | users.ts |
-| Browse | `GET /campuses`, `GET /campuses/:id/tree`, `GET /rooms/:id`, `GET /buildings/:id/systems`, `GET /asset-types` | campus.ts |
+| Browse | `GET /campuses`, `GET /campuses/:id/tree`, `GET /rooms/:id`, `GET /buildings/:id/systems` | campus.ts |
+| Catalogue | `GET /asset-types`, `POST /asset-types` (find-or-create by name) | types.ts |
 | Walk | `POST/DELETE /rooms/:id/walked` | campus.ts |
 | Assets | `GET /assets/:id`, `POST /assets`, `PATCH /assets/:id`, `POST /assets/:id/move`, `POST /assets/:id/copy`, `DELETE /assets/:id` | assets.ts |
 | Photos | `POST /uploads`, `POST /photos` (asset, room, or unattached), `GET /photos/:id`, `DELETE /photos/:id` | photos.ts |

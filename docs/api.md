@@ -183,6 +183,15 @@ Building- and floor-level assets: everything in the building with no room. **Aut
 **Auth:** none.
 **200** → `AssetType[]` sorted by category then name.
 
+### `POST /asset-types`
+Add a type to the catalogue from the field, or find it by name (case-insensitive, trimmed). An existing name keeps its stored category and tracking; the body's values are only used when creating. **Auth:** required.
+```json
+{ "name": "Kiln", "category": "equipment", "trackedIndividually": true }
+```
+`category` is one of `furniture`, `equipment`, `system`. `trackedIndividually: true` means one record per unit; `false` means the type is counted with a quantity.
+**201** → `AssetType` (new or existing).
+**400** validation, **401**.
+
 ---
 
 ## Walk status

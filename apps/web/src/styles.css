@@ -193,3 +193,18 @@ dialog.sheet > div { padding: 16px 16px calc(16px + env(safe-area-inset-bottom))
 .facts { display: grid; grid-template-columns: 96px 1fr; gap: 8px 12px; margin: 0; }
 .facts dt { color: var(--muted); font-size: 0.85rem; padding-top: 2px; }
 .facts dd { margin: 0; }
+
+/* Type picker: a combobox (dropdown you can type into) and the inline "add a type" form. */
+.combo { position: relative; }
+.combo .input { padding-right: 44px; }
+.combo-toggle { position: absolute; top: 0; right: 0; width: 44px; height: 100%; border: 0; background: transparent; color: var(--muted); font-size: 1rem; cursor: pointer; }
+.options { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: #fff; }
+.options.drop { position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 5; max-height: 42vh; overflow-y: auto; box-shadow: 0 8px 24px rgba(0,0,0,0.12); }
+.option-group { padding: 8px 12px 4px; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); background: #fafbf9; }
+.option { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 44px; padding: 0 12px; border: 0; border-bottom: 1px solid var(--line); background: transparent; text-align: left; font: inherit; cursor: pointer; }
+.option:last-child { border-bottom: 0; }
+.option.selected { background: var(--green-soft); color: var(--green-ink); font-weight: 600; }
+.option.add { color: var(--green); font-weight: 600; }
+.option:active { background: var(--green-soft); }
+.check { display: flex; align-items: flex-start; gap: 10px; cursor: pointer; }
+.check input { width: 22px; height: 22px; margin: 0; flex: none; accent-color: var(--green); }
