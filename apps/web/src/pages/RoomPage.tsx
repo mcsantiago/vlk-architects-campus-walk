@@ -1,6 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query';
 import type { AssetWithPhotos, RoomDetail } from '@campus-walk/shared';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { api, describeError } from '../api/client';
 import { keys, useDeletePhoto, useRoom, useSetWalked, useTree } from '../api/queries';
@@ -24,6 +24,7 @@ export function RoomPage() {
   const [copying, setCopying] = useState<AssetWithPhotos | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
+  const inlineAdd = useInlineVisible();
 
   if (room.isPending)
     return (
@@ -40,6 +41,7 @@ export function RoomPage() {
   const r = room.data;
   const back = `/c/${campusId}/buildings/${r.building.id}`;
   const refreshRoom = () => qc.invalidateQueries({ queryKey: keys.room(roomId) });
+  const addAsset = `/c/${campusId}/assets/new?roomId=${roomId}`;
 
   async function markWalked() {
     await walked.mutateAsync(true);
@@ -63,7 +65,7 @@ export function RoomPage() {
 
   return (
     <Page title={`${r.number} · ${r.name}`} subtitle={`${r.building.code} ${r.building.name} · ${r.floor.name} · ${r.roomType}`} back={back}>
-      <div className="stack">
+      <div className="stack room-body">
         <div className="card stack" style={{ gap: 10 }}>
           {r.walkedAt ? (
             <>
@@ -109,7 +111,7 @@ export function RoomPage() {
         <div className="section" style={{ marginTop: 4 }}>
           <div className="row between" style={{ marginBottom: 8 }}>
             <h3 style={{ margin: 0 }}>Assets · {r.assets.length}</h3>
-            <Link className="btn primary sm" to={`/c/${campusId}/assets/new?roomId=${roomId}`}>
+            <Link ref={inlineAdd.ref} className="btn primary sm" to={addAsset}>
               + Add asset
             </Link>
           </div>
@@ -124,8 +126,13 @@ export function RoomPage() {
         </div>
       </div>
 
-      <div style={{ height: 72 }} />
-      <Link className="btn primary fab" to={`/c/${campusId}/assets/new?roomId=${roomId}`}>
+      {/* Only while the inline button is off screen, and only on a phone (see .fab.auto). */}
+      <Link
+        className={`btn primary fab auto${inlineAdd.visible ? '' : ' shown'}`}
+        to={addAsset}
+        aria-hidden={inlineAdd.visible}
+        tabIndex={inlineAdd.visible ? -1 : undefined}
+      >
         + Add asset
       </Link>
 
@@ -141,4 +148,22 @@ export function RoomPage() {
       />
     </Page>
   );
+}
+
+/**
+ * Whether the element given to `ref` is on screen. Starts as true so the floating button
+ * stays hidden on first paint (the inline one is near the top) instead of flashing in.
+ * One IntersectionObserver, no scroll listeners; it re-evaluates on resize by itself.
+ */
+function useInlineVisible() {
+  const [el, ref] = useState<HTMLElement | null>(null);
+  const [visible, setVisible] = useState(true);
+  useEffect(() => {
+    if (!el || typeof IntersectionObserver === 'undefined') return;
+    // The sticky top bar covers the first 56px; behind it counts as off screen.
+    const io = new IntersectionObserver(([entry]) => setVisible(entry!.isIntersecting), { rootMargin: '-56px 0px 0px 0px' });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [el]);
+  return { ref, visible };
 }

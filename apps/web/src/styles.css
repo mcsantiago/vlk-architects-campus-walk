@@ -107,6 +107,23 @@ main { flex: 1; width: 100%; max-width: 760px; margin: 0 auto; padding: 16px 16p
   box-shadow: 0 6px 16px rgba(0,0,0,0.2);
 }
 
+/*
+ * Room page: the floating Add asset appears only on a phone, and only once the inline button
+ * has scrolled away. Hidden means visibility: hidden, so it is out of the tab order too.
+ * The room body reserves the button's height plus the safe area, so the last asset row and its
+ * Edit / Copy / Delete can always scroll clear of it. A <dialog> sits in the top layer, above it.
+ */
+.fab.auto { right: calc(16px + env(safe-area-inset-right)); opacity: 0; visibility: hidden; transform: translateY(8px); transition: opacity 0.15s, transform 0.15s, visibility 0s 0.15s; }
+.fab.auto.shown { opacity: 1; visibility: visible; transform: none; transition: opacity 0.15s, transform 0.15s, visibility 0s; }
+.room-body { padding-bottom: calc(56px + 16px + env(safe-area-inset-bottom)); }
+@media (min-width: 601px) {
+  .fab.auto { display: none; }
+  .room-body { padding-bottom: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fab.auto, .fab.auto.shown { transition: none; transform: none; }
+}
+
 .progress { height: 10px; background: #e3e6e2; border-radius: 999px; overflow: hidden; }
 .progress > div { height: 100%; background: var(--c5); transition: width 0.3s; }
 
