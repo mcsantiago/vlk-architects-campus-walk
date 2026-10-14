@@ -37,11 +37,12 @@ export async function exportAssetsCsv(db: Db, campusId: string): Promise<string>
     })
     .from(s.asset)
     .innerJoin(s.assetType, eq(s.asset.assetTypeId, s.assetType.id))
+    .innerJoin(s.assetCategory, eq(s.assetType.category, s.assetCategory.key))
     .innerJoin(s.building, eq(s.asset.buildingId, s.building.id))
     .leftJoin(s.floor, eq(s.asset.floorId, s.floor.id))
     .leftJoin(s.room, eq(s.asset.roomId, s.room.id))
     .where(and(eq(s.building.campusId, campusId), isNull(s.asset.deletedAt)))
-    .orderBy(s.building.code, s.floor.level, s.room.number, s.assetType.category, s.assetType.name, s.asset.label);
+    .orderBy(s.building.code, s.floor.level, s.room.number, s.assetCategory.sortOrder, s.assetType.name, s.asset.label);
 
   return toCsv(
     ['building_code', 'building_name', 'floor_level', 'floor_name', 'room_number', 'room_name', 'asset_type', 'category', 'label', 'quantity', 'condition', 'condition_label', 'notes', 'manufacturer', 'model', 'serial_number', 'install_year', 'updated_at', 'asset_id'],

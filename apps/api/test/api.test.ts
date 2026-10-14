@@ -317,6 +317,15 @@ describe('copy', () => {
   });
 });
 
+describe('asset categories', () => {
+  it('lists the categories from the table, in walking order', async () => {
+    const { status, body } = await call('GET', '/asset-categories');
+    expect(status).toBe(200);
+    expect(body.map((c: { key: string }) => c.key)).toEqual(['furniture', 'technology', 'equipment', 'system']);
+    expect(body[0]).toEqual({ key: 'furniture', name: 'Furniture', sortOrder: 10, color: '#3949ab', trackedByDefault: false });
+  });
+});
+
 describe('asset types', () => {
   it('lets a walker add a type from the field, once, and use it straight away', async () => {
     const before = (await call('GET', '/asset-types')).body.length;
@@ -335,7 +344,9 @@ describe('asset types', () => {
     expect(asset.body.assetType).toEqual(kiln.body);
 
     expect((await call('POST', '/asset-types', { name: '', category: 'equipment', trackedIndividually: true })).status).toBe(400);
-    expect((await call('POST', '/asset-types', { name: 'Forge', category: 'tools', trackedIndividually: true })).status).toBe(400);
+    const unknown = await call('POST', '/asset-types', { name: 'Forge', category: 'tools', trackedIndividually: true });
+    expect(unknown.status).toBe(400);
+    expect(unknown.body.error).toBe('unknown category');
     expect((await call('POST', '/asset-types', { name: 'Forge', category: 'equipment', trackedIndividually: true }, null)).status).toBe(401);
   });
 

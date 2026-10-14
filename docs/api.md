@@ -183,16 +183,24 @@ Building- and floor-level assets: everything in the building with no room. **Aut
 **200** → `(Asset & { photos: Photo[] })[]`
 **404** unknown building.
 
+### `GET /asset-categories`
+The categories types are grouped into, from the `asset_category` table. The web app reads this for the picker's chips and groups, the order assets are listed in a room, and badge colours. There is no endpoint to add one yet; a row inserted in the table shows up everywhere without a code change. **Auth:** none.
+**200** →
+```json
+[{ "key": "furniture", "name": "Furniture", "sortOrder": 10, "color": "#3949ab", "trackedByDefault": false }, ...]
+```
+Sorted by `sortOrder`. `trackedByDefault` is what "one record per unit" starts as when a type is added in that category. The defaults are Furniture, Technology, Equipment and System.
+
 ### `GET /asset-types`
 **Auth:** none.
-**200** → `AssetType[]` sorted by category then name.
+**200** → `AssetType[]` sorted by their category's `sortOrder`, then name.
 
 ### `POST /asset-types`
 Add a type to the catalogue from the field, or find it by name (case-insensitive, trimmed). An existing name keeps its stored category and tracking; the body's values are only used when creating. **Auth:** required.
 ```json
 { "name": "Kiln", "category": "equipment", "trackedIndividually": true }
 ```
-`category` is one of `furniture`, `technology`, `equipment`, `system`. `trackedIndividually: true` means one record per unit; `false` means the type is counted with a quantity.
+`category` is a category `key` from `GET /asset-categories`; an unknown key is a **400** `unknown category`. `trackedIndividually: true` means one record per unit; `false` means the type is counted with a quantity.
 
 ### `PATCH /asset-types/:id`
 Change a type's category or how it is counted. Category belongs to the type, so every asset of the type moves with it in every listing, roll-up and export. The name is not editable. **Auth:** required.

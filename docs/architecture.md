@@ -157,6 +157,7 @@ erDiagram
   BUILDING ||--o{ ASSET : "always located in"
   FLOOR |o--o{ ASSET : "optionally on"
   ROOM |o--o{ ASSET : "optionally in"
+  ASSET_CATEGORY ||--o{ ASSET_TYPE : groups
   ASSET_TYPE ||--o{ ASSET : classifies
   ASSET |o--o{ PHOTO : "photo of asset"
   ROOM |o--o{ PHOTO : "photo of room"
@@ -196,10 +197,17 @@ erDiagram
     timestamptz walked_at
     uuid walked_by_id FK
   }
+  ASSET_CATEGORY {
+    text key PK "furniture, technology, ..."
+    text name "unique"
+    int sort_order "room listing and picker order"
+    text color "badge colour"
+    bool tracked_by_default
+  }
   ASSET_TYPE {
     uuid id PK
     text name "unique"
-    text category "furniture | technology | equipment | system"
+    text category FK "asset_category.key"
     bool tracked_individually
   }
   ASSET {

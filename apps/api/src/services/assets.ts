@@ -38,8 +38,9 @@ export async function listAssets(db: Db, where?: SQL) {
     .select(assetView)
     .from(s.asset)
     .innerJoin(s.assetType, eq(s.asset.assetTypeId, s.assetType.id))
+    .innerJoin(s.assetCategory, eq(s.assetType.category, s.assetCategory.key))
     .where(and(liveAssets, where))
-    .orderBy(s.assetType.category, s.assetType.name, s.asset.label, s.asset.createdAt);
+    .orderBy(s.assetCategory.sortOrder, s.assetType.name, s.asset.label, s.asset.createdAt);
 }
 export type AssetView = Awaited<ReturnType<typeof listAssets>>[number];
 

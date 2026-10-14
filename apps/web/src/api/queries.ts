@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
+  AssetCategoryView,
   AssetDetail,
   CopyAssetInput,
   PhotoDetail,
@@ -25,6 +26,7 @@ export const keys = {
   users: ['users'] as const,
   campuses: ['campuses'] as const,
   assetTypes: ['asset-types'] as const,
+  assetCategories: ['asset-categories'] as const,
   tree: (campusId: string) => ['tree', campusId] as const,
   room: (roomId: string) => ['room', roomId] as const,
   systems: (buildingId: string) => ['systems', buildingId] as const,
@@ -37,6 +39,9 @@ export const useUsers = () => useQuery({ queryKey: keys.users, queryFn: () => ap
 export const useCampuses = () => useQuery({ queryKey: keys.campuses, queryFn: () => api<CampusView[]>('/campuses') });
 export const useAssetTypes = () =>
   useQuery({ queryKey: keys.assetTypes, queryFn: () => api<AssetTypeView[]>('/asset-types'), staleTime: 5 * 60_000 });
+/** Changes rarely and has no editor yet, so it is fetched once per session. */
+export const useAssetCategories = () =>
+  useQuery({ queryKey: keys.assetCategories, queryFn: () => api<AssetCategoryView[]>('/asset-categories'), staleTime: Infinity });
 export const useTree = (campusId: string) =>
   useQuery({ queryKey: keys.tree(campusId), queryFn: () => api<CampusTree>(`/campuses/${campusId}/tree`) });
 export const useRoom = (roomId: string) =>

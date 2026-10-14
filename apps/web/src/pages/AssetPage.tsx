@@ -5,6 +5,7 @@ import { Link, useNavigate, useParams } from 'react-router';
 import { ApiError } from '../api/client';
 import { keys, useAsset, useDeleteAsset, useMoveAsset, useTree } from '../api/queries';
 import { locationBody } from '../components/AssetFields';
+import { CategoryBadge } from '../components/CategoryBadge';
 import { ConditionDot, describeCondition } from '../components/ConditionPicker';
 import { useConfirm } from '../components/Confirm';
 import { CopySheet } from '../components/CopySheet';
@@ -102,7 +103,7 @@ export function AssetPage() {
           <dl className="facts">
             <dt>Type</dt>
             <dd>
-              {a.assetType.name} <span className={`badge cat-${a.assetType.category}`}>{a.assetType.category}</span>
+              {a.assetType.name} <CategoryBadge category={a.assetType.category} />
             </dd>
             <dt>Label</dt>
             <dd>{a.label ?? <span className="muted">none</span>}</dd>

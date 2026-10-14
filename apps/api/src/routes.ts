@@ -26,7 +26,7 @@ import {
 } from './services/campus.ts';
 import { exportAssetsCsv, exportRoomsCsv, importRoomsCsv } from './services/csv.ts';
 import { createPhoto, createUpload, deletePhoto, getPhoto, photosByRoom, withPhotos } from './services/photos.ts';
-import { findOrCreateAssetType, listAssetTypes, updateAssetType } from './services/types.ts';
+import { findOrCreateAssetType, listAssetCategories, listAssetTypes, updateAssetType } from './services/types.ts';
 import { findOrCreateUser, listUsers } from './services/users.ts';
 
 export const routes = new Hono<Env>();
@@ -60,6 +60,7 @@ routes.post('/campuses/:id/rooms/import', async (c) => {
   return c.json(await importRoomsCsv(c.get('db'), idParam(c), text));
 });
 
+routes.get('/asset-categories', async (c) => c.json(await listAssetCategories(c.get('db'))));
 routes.get('/asset-types', async (c) => c.json(await listAssetTypes(c.get('db'))));
 routes.post('/asset-types', async (c) => {
   await requireUser(c);

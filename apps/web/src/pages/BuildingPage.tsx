@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { useTree } from '../api/queries';
+import { CategoryBadge } from '../components/CategoryBadge';
 import { SiteInfoCard } from '../components/InfoCard';
 import { ErrorNotice, Loading, Page, formatWhen } from '../components/Page';
 
@@ -50,7 +51,7 @@ export function BuildingPage() {
         </SiteInfoCard>
 
         <Link className="item" to={`/c/${campusId}/buildings/${b.id}/systems`}>
-          <span className="badge cat-system">systems</span>
+          <CategoryBadge category="system" label="systems" />
           <div className="grow">
             <div className="title">Building systems</div>
             <div className="small muted">{b.systemAssetCount} assets not tied to a room (roof, mechanical, corridors)</div>

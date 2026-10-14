@@ -133,16 +133,18 @@ describe('inventory import from a different district', () => {
       buildings: ['building_id,campus_id,name,roof_type', 'W1,X1,Main,TPO'],
       floors: ['floor_id,building_id,level', 'W1-1,W1,1', 'W1-B,W1,-1'],
       rooms: ['room_id,floor_id,room_number,room_type,room_name', 'W1-101,W1-1,101,Makerspace,STEM Lab', 'W1-B01,W1-B,B01,,'],
-      asset_types: ['asset_type_id,name,category', 'T1,3D Printer,Technology', 'T2,Mascot Costume,Spirit Gear', 'T3,Boiler,building_system'],
-      assets: ['asset_type_id,building_id,floor_id,room_id,quantity,condition_rating,assessed_by,color', 'T1,W1,W1-1,W1-101,2,4,R. Diaz,grey', 'T2,W1,W1-1,W1-101,1,,,blue', 'T3,W1,,,1,2,R. Diaz,'],
+      asset_types: ['asset_type_id,name,category', 'T1,3D Printer,Technology', 'T2,Mascot Costume,Spirit Gear', 'T3,Boiler,building_system', 'T4,Irrigation Controller,Grounds'],
+      assets: ['asset_type_id,building_id,floor_id,room_id,quantity,condition_rating,assessed_by,color', 'T1,W1,W1-1,W1-101,2,4,R. Diaz,grey', 'T2,W1,W1-1,W1-101,1,,,blue', 'T3,W1,,,1,2,R. Diaz,', 'T4,W1,,,1,3,R. Diaz,'],
     };
     for (const [name, lines] of Object.entries(files)) await writeFile(join(path, `${name}.csv`), lines.join('\n') + '\n');
+    // A category added as a row, with no code change, is matched by name like the built-in ones.
+    await h.db.insert(s.assetCategory).values({ key: 'grounds', name: 'Grounds', sortOrder: 50, color: '#558b2f', trackedByDefault: true });
   });
   afterAll(() => h.close());
 
   it('takes the files as data: unknown words are kept or noted, never fatal', async () => {
     const result = await importInventory(h.db, dir);
-    expect(result.campuses).toEqual([expect.objectContaining({ name: 'Westfield Middle', buildings: 1, rooms: 2, assets: 3, unrated: 1 })]);
+    expect(result.campuses).toEqual([expect.objectContaining({ name: 'Westfield Middle', buildings: 1, rooms: 2, assets: 4, unrated: 1 })]);
     expect(result.notes).toEqual([
       'rooms.csv:3 room B01 has no type; recorded as "other"',
       'asset_types.csv:3 category "Spirit Gear" for Mascot Costume is not one of ours; recorded as equipment',
@@ -159,6 +161,7 @@ describe('inventory import from a different district', () => {
     expect(types['3D Printer']).toMatchObject({ category: 'technology', trackedIndividually: false });
     expect(types['Mascot Costume']).toMatchObject({ category: 'equipment', trackedIndividually: true });
     expect(types['Boiler']).toMatchObject({ category: 'system' });
+    expect(types['Irrigation Controller']).toMatchObject({ category: 'grounds', trackedIndividually: true });
   });
 
   it('still refuses what the model cannot hold', async () => {

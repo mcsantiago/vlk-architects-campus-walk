@@ -87,10 +87,8 @@ main { flex: 1; width: 100%; max-width: 760px; margin: 0 auto; padding: 16px 16p
 .badge { display: inline-block; font-size: 0.75rem; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: #e9ebe8; color: var(--muted); white-space: nowrap; }
 .badge.ok { background: #dcefdc; color: var(--c5); }
 .badge.warn { background: var(--warn-soft); color: #8a5a00; }
-.badge.cat-furniture { background: #e8eaf6; color: #3949ab; }
-.badge.cat-technology { background: #e3f2fd; color: #1565c0; }
-.badge.cat-equipment { background: #e0f2f1; color: #00695c; }
-.badge.cat-system { background: #fbe9e7; color: #bf360c; }
+/* Category colour comes from the asset_category row as --cat; the background is a tint of it. */
+.badge.cat { --cat: var(--muted); color: var(--cat); background: #e9ebe8; background: color-mix(in srgb, var(--cat) 12%, #fff); }
 
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;

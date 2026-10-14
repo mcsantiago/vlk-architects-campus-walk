@@ -3,6 +3,7 @@ import { useRef, useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { API_URL } from '../api/client';
 import { useImportRooms, useSummary, useTree } from '../api/queries';
+import { CategoryBadge } from '../components/CategoryBadge';
 import { ConditionDot } from '../components/ConditionPicker';
 import { ErrorNotice, Loading, Page } from '../components/Page';
 
@@ -177,7 +178,7 @@ export function SummaryPage() {
                 {shownTypes.map((t) => (
                   <tr key={t.assetTypeId}>
                     <td>
-                      {t.name} <span className={`badge cat-${t.category}`}>{t.category}</span>
+                      {t.name} <CategoryBadge category={t.category} />
                       <div className="bar" style={{ width: `${(100 * t.units) / maxUnits}%`, marginTop: 6 }} />
                     </td>
                     <td className="num">

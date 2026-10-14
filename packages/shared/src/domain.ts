@@ -15,9 +15,11 @@ export type Condition = (typeof CONDITIONS)[number]['value'];
 /** Assets at or below this rating show up in the office "poor condition" list. */
 export const POOR_CONDITION_MAX = 2;
 
-/** Technology is split from equipment because districts budget and refresh it separately. */
-export const ASSET_CATEGORIES = ['furniture', 'technology', 'equipment', 'system'] as const;
-export type AssetCategory = (typeof ASSET_CATEGORIES)[number];
+/**
+ * A category's key, e.g. "technology". The list itself lives in the asset_category table
+ * (GET /asset-categories); nothing in code depends on which categories exist.
+ */
+export type AssetCategory = string;
 
 /**
  * Room type is free text: it comes from the district's floor plan or inventory and is only ever

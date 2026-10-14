@@ -17,6 +17,15 @@ export interface UserRef {
   name: string;
 }
 
+export interface AssetCategoryView {
+  key: string;
+  name: string;
+  sortOrder: number;
+  /** #rrggbb */
+  color: string;
+  trackedByDefault: boolean;
+}
+
 export interface AssetTypeView {
   id: string;
   name: string;

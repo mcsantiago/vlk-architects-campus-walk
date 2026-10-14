@@ -1,7 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 import { sql } from 'drizzle-orm';
-import type { AssetCategory } from '@campus-walk/shared';
 import { parseCsv } from '../csv.ts';
 import { findOrCreateAssetType } from '../services/types.ts';
 import { createDb, type Db } from './client.ts';
@@ -14,8 +13,9 @@ import * as s from './schema.ts';
  * rating and the person who gave it; rows in rooms nobody has reached yet come in unrated.
  *
  * The files are taken as data, not as a schema we own: only the columns needed to place a row
- * are required, extra columns are ignored, room types are stored as written, and a category we
- * have no name for falls back to equipment with a note rather than stopping the import. Only a
+ * are required, extra columns are ignored, room types are stored as written, and a category is
+ * matched against the asset_category table (by key, name or a common synonym); one we have no
+ * row for falls back to equipment with a note rather than stopping the import. Only a
  * broken reference (a room on the wrong floor, an unknown type) or a value outside the model
  * (a rating of 7) is an error. Everything is validated before anything is written and the
  * writes run in one transaction. A campus whose name is already in the database is skipped,
@@ -25,24 +25,39 @@ import * as s from './schema.ts';
 const SAMPLE_DIR = new URL('../../../../data/sample/', import.meta.url);
 
 /**
- * Category is the one closed list in the model (it drives grouping and colour), so inventory
- * wording is normalised onto it; anything unrecognised becomes equipment and is reported.
+ * Inventory wording for categories, onto category keys. Only consulted when the word is not
+ * already a category's key or name, and only used if that key exists in asset_category.
  */
-const CATEGORY: Record<string, AssetCategory> = {
-  furniture: 'furniture',
+const CATEGORY_SYNONYMS: Record<string, string> = {
   furnishings: 'furniture',
-  technology: 'technology',
   tech: 'technology',
   it: 'technology',
   av: 'technology',
-  equipment: 'equipment',
   'building system': 'system',
   'building systems': 'system',
-  system: 'system',
   systems: 'system',
   mep: 'system',
 };
-const categoryOf = (text: string): AssetCategory | undefined => CATEGORY[text.trim().toLowerCase().replace(/[_-]+/g, ' ')];
+/** Where an unrecognised category goes, if the table has it; otherwise the last category by sort order. */
+const FALLBACK_CATEGORY = 'equipment';
+
+type Category = typeof s.assetCategory.$inferSelect;
+const normalise = (text: string) => text.trim().toLowerCase().replace(/[_-]+/g, ' ');
+
+/** Matches inventory wording to a category row: key, then name, then synonym. */
+function categoryMatcher(categories: Category[]) {
+  const byWord = new Map<string, Category>();
+  for (const c of categories) {
+    byWord.set(normalise(c.key), c);
+    byWord.set(normalise(c.name), c);
+  }
+  for (const [word, key] of Object.entries(CATEGORY_SYNONYMS)) {
+    const c = categories.find((x) => x.key === key);
+    if (c && !byWord.has(word)) byWord.set(word, c);
+  }
+  const fallback = categories.find((c) => c.key === FALLBACK_CATEGORY) ?? categories[categories.length - 1];
+  return { match: (text: string) => byWord.get(normalise(text)), fallback };
+}
 
 /** Sample dates are calendar days in Texas; noon Central keeps them on that day in any display zone. */
 const texasNoon = (day: string) => new Date(`${day}T12:00:00-05:00`);
@@ -97,6 +112,9 @@ export async function importInventory(db: Db, dir: URL = SAMPLE_DIR, now = new D
     readRows(dir, 'assets'),
   ]);
   const district = await districtName(dir);
+  const categories = await db.select().from(s.assetCategory).orderBy(s.assetCategory.sortOrder);
+  if (!categories.length) throw new Error('inventory import refused: the asset_category table is empty');
+  const category = categoryMatcher(categories);
 
   // --- validate every reference before touching the database -----------------------------
   const errors: string[] = [];
@@ -120,7 +138,8 @@ export async function importInventory(db: Db, dir: URL = SAMPLE_DIR, now = new D
     if (row.walked_on && Number.isNaN(texasNoon(row.walked_on).getTime())) errors.push(`rooms.csv:${line} bad walked_on ${row.walked_on}`);
   }
   for (const { line, row } of types)
-    if (!categoryOf(row.category)) notes.push(`asset_types.csv:${line} category "${row.category}" for ${row.name} is not one of ours; recorded as equipment`);
+    if (!category.match(row.category))
+      notes.push(`asset_types.csv:${line} category "${row.category}" for ${row.name} is not one of ours; recorded as ${category.fallback!.key}`);
   const maxQuantity = new Map<string, number>();
   for (const { line, row } of assets) {
     const where = `assets.csv:${line}${row.asset_id ? ` (${row.asset_id})` : ''}`;
@@ -159,17 +178,17 @@ export async function importInventory(db: Db, dir: URL = SAMPLE_DIR, now = new D
     const users = await tx.select().from(s.user);
     const userId = (name: string) => users.find((u) => u.name.toLowerCase() === name.toLowerCase())!.id;
 
-    // Types: furniture is counted; everything else is one record per unit unless the inventory
-    // itself counts it (a lab of 30 desktops in one row).
+    // Types: the category's default decides counted vs one-per-unit, except that a type the
+    // inventory itself counts (a lab of 30 desktops in one row) is always counted.
     const before = (await tx.select({ n: sql<number>`count(*)`.mapWith(Number) }).from(s.assetType))[0]!.n;
     const typeRowId = new Map<string, string>();
     const typeInfo = new Map<string, typeof s.assetType.$inferSelect>();
     for (const { row } of types) {
-      const category = categoryOf(row.category) ?? 'equipment';
+      const cat = category.match(row.category) ?? category.fallback!;
       const type = await findOrCreateAssetType(tx, {
         name: row.name,
-        category,
-        trackedIndividually: category !== 'furniture' && (maxQuantity.get(row.asset_type_id) ?? 1) === 1,
+        category: cat.key,
+        trackedIndividually: cat.trackedByDefault && (maxQuantity.get(row.asset_type_id) ?? 1) === 1,
       });
       typeRowId.set(row.asset_type_id, type.id);
       typeInfo.set(row.asset_type_id, type);

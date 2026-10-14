@@ -1,11 +1,20 @@
-import { and, eq, gt, isNull, sql } from 'drizzle-orm';
+import { and, asc, eq, getTableColumns, gt, isNull, sql } from 'drizzle-orm';
 import type { CreateAssetTypeInput, UpdateAssetTypeInput } from '@campus-walk/shared';
 import type { Db } from '../db/client.ts';
 import * as s from '../db/schema.ts';
 import { badRequest, notFound } from '../errors.ts';
 
+export function listAssetCategories(db: Db) {
+  return db.select().from(s.assetCategory).orderBy(asc(s.assetCategory.sortOrder), asc(s.assetCategory.name));
+}
+
+/** Grouped the way the picker shows them: by the category's sort order, then name. */
 export function listAssetTypes(db: Db) {
-  return db.select().from(s.assetType).orderBy(s.assetType.category, s.assetType.name);
+  return db
+    .select(getTableColumns(s.assetType))
+    .from(s.assetType)
+    .innerJoin(s.assetCategory, eq(s.assetType.category, s.assetCategory.key))
+    .orderBy(s.assetCategory.sortOrder, s.assetType.name);
 }
 
 async function findByName(db: Db, name: string) {
