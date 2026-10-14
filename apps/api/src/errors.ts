@@ -52,6 +52,7 @@ const CONSTRAINT_MESSAGES: Record<string, string> = {
   asset_condition_ck: 'condition must be between 1 and 5',
   asset_quantity_ck: 'quantity must be at least 1',
   photo_s3_key_unique: 'photo already recorded for this upload',
+  asset_type_category_asset_category_key_fk: 'unknown category',
 };
 
 /** Drizzle wraps driver errors as "Failed query"; the Postgres error, naming the constraint, is on `cause`. */

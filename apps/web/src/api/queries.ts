@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type {
+  AssetCategoryView,
   AssetDetail,
   CopyAssetInput,
   PhotoDetail,
@@ -11,6 +12,7 @@ import type {
   CampusView,
   CreateAssetInput,
   CreateAssetTypeInput,
+  UpdateAssetTypeInput,
   MoveAssetInput,
   RoomDetail,
   RoomHeader,
@@ -24,6 +26,7 @@ export const keys = {
   users: ['users'] as const,
   campuses: ['campuses'] as const,
   assetTypes: ['asset-types'] as const,
+  assetCategories: ['asset-categories'] as const,
   tree: (campusId: string) => ['tree', campusId] as const,
   room: (roomId: string) => ['room', roomId] as const,
   systems: (buildingId: string) => ['systems', buildingId] as const,
@@ -36,6 +39,9 @@ export const useUsers = () => useQuery({ queryKey: keys.users, queryFn: () => ap
 export const useCampuses = () => useQuery({ queryKey: keys.campuses, queryFn: () => api<CampusView[]>('/campuses') });
 export const useAssetTypes = () =>
   useQuery({ queryKey: keys.assetTypes, queryFn: () => api<AssetTypeView[]>('/asset-types'), staleTime: 5 * 60_000 });
+/** Changes rarely and has no editor yet, so it is fetched once per session. */
+export const useAssetCategories = () =>
+  useQuery({ queryKey: keys.assetCategories, queryFn: () => api<AssetCategoryView[]>('/asset-categories'), staleTime: Infinity });
 export const useTree = (campusId: string) =>
   useQuery({ queryKey: keys.tree(campusId), queryFn: () => api<CampusTree>(`/campuses/${campusId}/tree`) });
 export const useRoom = (roomId: string) =>
@@ -73,6 +79,21 @@ export function useCreateAssetType() {
     onSuccess: (type) => {
       qc.setQueryData<AssetTypeView[]>(keys.assetTypes, (old) => old && (old.some((t) => t.id === type.id) ? old : [...old, type]));
       void qc.invalidateQueries({ queryKey: keys.assetTypes });
+    },
+  });
+}
+
+/** Recategorises or recounts a type; every listing shows the type's category, so they all refresh. */
+export function useUpdateAssetType() {
+  const qc = useQueryClient();
+  const invalidate = useInvalidateAssets();
+  return useMutation({
+    mutationFn: ({ id, ...input }: UpdateAssetTypeInput & { id: string }) => api<AssetTypeView>(`/asset-types/${id}`, { method: 'PATCH', body: input }),
+    onSuccess: (type) => {
+      qc.setQueryData<AssetTypeView[]>(keys.assetTypes, (old) => old?.map((t) => (t.id === type.id ? type : t)));
+      void qc.invalidateQueries({ queryKey: keys.assetTypes });
+      void qc.invalidateQueries({ queryKey: ['asset'] });
+      void invalidate();
     },
   });
 }

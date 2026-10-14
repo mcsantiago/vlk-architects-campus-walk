@@ -274,7 +274,7 @@ describe('office summary', () => {
 });
 
 describe('copy', () => {
-  it('copies the descriptive fields to another room as a new record, leaving photos behind', async () => {
+  it('copies the descriptive fields to another room as a new record, leaving photos and the tag behind', async () => {
     const source = (
       await call('POST', '/assets', {
         roomId: room('104').id,
@@ -293,7 +293,8 @@ describe('copy', () => {
       floorId: room('106').floorId,
       quantity: 24,
       condition: 3,
-      label: 'row desks',
+      // The label is an inventory tag: one tag, one item.
+      label: null,
       notes: 'laminate chipped on several',
       version: 1,
       assetType: { name: 'Student Desk' },
@@ -317,6 +318,15 @@ describe('copy', () => {
   });
 });
 
+describe('asset categories', () => {
+  it('lists the categories from the table, in walking order', async () => {
+    const { status, body } = await call('GET', '/asset-categories');
+    expect(status).toBe(200);
+    expect(body.map((c: { key: string }) => c.key)).toEqual(['furniture', 'technology', 'equipment', 'system']);
+    expect(body[0]).toEqual({ key: 'furniture', name: 'Furniture', sortOrder: 10, color: '#3949ab', trackedByDefault: false });
+  });
+});
+
 describe('asset types', () => {
   it('lets a walker add a type from the field, once, and use it straight away', async () => {
     const before = (await call('GET', '/asset-types')).body.length;
@@ -335,7 +345,65 @@ describe('asset types', () => {
     expect(asset.body.assetType).toEqual(kiln.body);
 
     expect((await call('POST', '/asset-types', { name: '', category: 'equipment', trackedIndividually: true })).status).toBe(400);
-    expect((await call('POST', '/asset-types', { name: 'Forge', category: 'tools', trackedIndividually: true })).status).toBe(400);
+    const unknown = await call('POST', '/asset-types', { name: 'Forge', category: 'tools', trackedIndividually: true });
+    expect(unknown.status).toBe(400);
+    expect(unknown.body.error).toBe('unknown category');
     expect((await call('POST', '/asset-types', { name: 'Forge', category: 'equipment', trackedIndividually: true }, null)).status).toBe(401);
+  });
+
+  it('recategorises a type and every asset of it follows', async () => {
+    const kiln = (await call('POST', '/asset-types', { name: 'Kiln', category: 'equipment', trackedIndividually: true })).body;
+    const asset = (await call('POST', '/assets', { roomId: room('104').id, assetTypeId: kiln.id, condition: 3 })).body;
+
+    const moved = await call('PATCH', `/asset-types/${kiln.id}`, { category: 'technology' });
+    expect(moved.status).toBe(200);
+    expect(moved.body).toMatchObject({ id: kiln.id, name: 'Kiln', category: 'technology', trackedIndividually: true });
+    expect((await call('GET', `/assets/${asset.id}`)).body.assetType.category).toBe('technology');
+    const summary = (await call('GET', `/campuses/${campusId}/summary`)).body;
+    expect(summary.countsByType.find((t: { name: string }) => t.name === 'Kiln')).toMatchObject({ category: 'technology' });
+
+    // counted -> per unit is refused while a record counts more than one
+    const desk = (await call('GET', '/asset-types')).body.find((t: { name: string }) => t.name === 'Student Desk');
+    const refused = await call('PATCH', `/asset-types/${desk.id}`, { trackedIndividually: true });
+    expect(refused.status).toBe(400);
+    expect(refused.body.error).toMatch(/quantity above 1/);
+
+    expect((await call('PATCH', `/asset-types/${kiln.id}`, {})).status).toBe(400);
+    expect((await call('PATCH', `/asset-types/${kiln.id}`, { category: 'tools' })).status).toBe(400);
+    expect((await call('PATCH', `/asset-types/${kiln.id}`, { category: 'equipment' }, null)).status).toBe(401);
+    expect((await call('PATCH', `/asset-types/00000000-0000-0000-0000-000000000000`, { category: 'equipment' })).status).toBe(404);
+  });
+});
+
+describe('inventory records', () => {
+  it('keeps an unrated asset with its provenance until a walker rates it', async () => {
+    const types = (await call('GET', '/asset-types')).body;
+    const projector = types.find((t: { name: string }) => t.name === 'Projector');
+    const created = await call('POST', '/assets', {
+      roomId: room('104').id,
+      assetTypeId: projector.id,
+      manufacturer: 'Epson',
+      model: 'PowerLite 992F',
+      serialNumber: 'X9K2-0412',
+      installYear: 2021,
+    });
+    expect(created.status).toBe(201);
+    expect(created.body).toMatchObject({ condition: null, manufacturer: 'Epson', model: 'PowerLite 992F', serialNumber: 'X9K2-0412', installYear: 2021 });
+
+    const summary = (await call('GET', `/campuses/${campusId}/summary`)).body;
+    expect(summary.notRated).toEqual({ records: 1, units: 1 });
+    expect(summary.poorCondition.some((a: { id: string }) => a.id === created.body.id)).toBe(false);
+
+    // a copy is a different unit: same make and model, no serial
+    const copy = await call('POST', `/assets/${created.body.id}/copy`, { roomId: room('103').id });
+    expect(copy.status).toBe(201);
+    expect(copy.body).toMatchObject({ manufacturer: 'Epson', model: 'PowerLite 992F', serialNumber: null, installYear: 2021, condition: null });
+
+    const rated = await call('PATCH', `/assets/${created.body.id}`, { version: 1, condition: 4 });
+    expect(rated.status).toBe(200);
+    expect(rated.body).toMatchObject({ condition: 4, serialNumber: 'X9K2-0412' });
+    expect((await call('GET', `/campuses/${campusId}/summary`)).body.notRated).toEqual({ records: 1, units: 1 });
+
+    expect((await call('POST', '/assets', { roomId: room('104').id, assetTypeId: projector.id, installYear: 1500 })).status).toBe(400);
   });
 });

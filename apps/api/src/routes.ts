@@ -3,6 +3,7 @@ import {
   CopyAssetInput,
   CreateAssetInput,
   CreateAssetTypeInput,
+  UpdateAssetTypeInput,
   CreatePhotoInput,
   CreateUploadInput,
   CreateUserInput,
@@ -25,7 +26,7 @@ import {
 } from './services/campus.ts';
 import { exportAssetsCsv, exportRoomsCsv, importRoomsCsv } from './services/csv.ts';
 import { createPhoto, createUpload, deletePhoto, getPhoto, photosByRoom, withPhotos } from './services/photos.ts';
-import { findOrCreateAssetType, listAssetTypes } from './services/types.ts';
+import { findOrCreateAssetType, listAssetCategories, listAssetTypes, updateAssetType } from './services/types.ts';
 import { findOrCreateUser, listUsers } from './services/users.ts';
 
 export const routes = new Hono<Env>();
@@ -59,11 +60,17 @@ routes.post('/campuses/:id/rooms/import', async (c) => {
   return c.json(await importRoomsCsv(c.get('db'), idParam(c), text));
 });
 
+routes.get('/asset-categories', async (c) => c.json(await listAssetCategories(c.get('db'))));
 routes.get('/asset-types', async (c) => c.json(await listAssetTypes(c.get('db'))));
 routes.post('/asset-types', async (c) => {
   await requireUser(c);
   const input = await parseBody(c, CreateAssetTypeInput);
   return c.json(await findOrCreateAssetType(c.get('db'), input), 201);
+});
+routes.patch('/asset-types/:id', async (c) => {
+  await requireUser(c);
+  const input = await parseBody(c, UpdateAssetTypeInput);
+  return c.json(await updateAssetType(c.get('db'), idParam(c), input));
 });
 
 routes.get('/buildings/:id/systems', async (c) => {

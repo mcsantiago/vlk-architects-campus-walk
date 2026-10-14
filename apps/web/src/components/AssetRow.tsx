@@ -1,4 +1,6 @@
 import { conditionLabel, type AssetWithPhotos } from '@campus-walk/shared';
+import { useAssetCategories } from '../api/queries';
+import { CategoryBadge, orderedCategories } from './CategoryBadge';
 import { Link, useNavigate } from 'react-router';
 import { ConditionDot } from './ConditionPicker';
 
@@ -18,9 +20,7 @@ export function AssetRow({ asset, campusId, actions }: { asset: AssetWithPhotos;
         {thumb ? (
           <img src={thumb.url} alt="" width={48} height={48} style={{ borderRadius: 8, objectFit: 'cover', flex: 'none' }} />
         ) : (
-          <span className={`badge cat-${asset.assetType.category}`} style={{ flex: 'none' }}>
-            {asset.assetType.category}
-          </span>
+          <CategoryBadge category={asset.assetType.category} style={{ flex: 'none' }} />
         )}
         <div className="grow">
           <div className="title">
@@ -52,7 +52,7 @@ export function AssetRow({ asset, campusId, actions }: { asset: AssetWithPhotos;
   );
 }
 
-/** Assets grouped by category in the order a walker scans a room: furniture, then equipment, then systems. */
+/** Assets grouped by category, in the categories' stored order (the order a walker scans a room). */
 export function AssetList({
   assets,
   campusId,
@@ -64,16 +64,16 @@ export function AssetList({
   empty: string;
   actions?: AssetRowActions;
 }) {
+  const categories = useAssetCategories();
   if (assets.length === 0) return <p className="center">{empty}</p>;
-  const groups = ['furniture', 'equipment', 'system'] as const;
   return (
     <div className="stack">
-      {groups.map((g) => {
-        const rows = assets.filter((a) => a.assetType.category === g);
+      {orderedCategories(categories.data, assets.map((a) => a.assetType.category)).map((g) => {
+        const rows = assets.filter((a) => a.assetType.category === g.key);
         if (rows.length === 0) return null;
         return (
-          <div key={g} className="section" style={{ marginTop: 8 }}>
-            <h3>{g}</h3>
+          <div key={g.key} className="section" style={{ marginTop: 8 }}>
+            <h3>{g.name}</h3>
             <ul className="list">
               {rows.map((a) => (
                 <li key={a.id}>

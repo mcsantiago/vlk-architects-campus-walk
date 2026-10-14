@@ -53,7 +53,7 @@ export function PhotoPage() {
           {p.asset && (
             <Link to={`/c/${campusId}/assets/${p.asset.id}`} className="row">
               <span className="grow">
-                Photo of <strong>{subject}</strong>, condition {p.asset.condition} ({conditionLabel(p.asset.condition)})
+                Photo of <strong>{subject}</strong>, {p.asset.condition === null ? 'not yet rated' : `condition ${p.asset.condition} (${conditionLabel(p.asset.condition)})`}
               </span>
               <span className="chev">›</span>
             </Link>

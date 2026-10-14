@@ -21,6 +21,10 @@ export function ConditionPicker({ value, onChange }: { value: number | null; onC
   );
 }
 
-export function ConditionDot({ value }: { value: number }) {
-  return <span className={`dot c${value}`} title={conditionLabel(value)} />;
+/** A hollow dot stands for "not rated yet". */
+export function ConditionDot({ value }: { value: number | null }) {
+  return <span className={`dot ${value === null ? 'none' : `c${value}`}`} title={conditionLabel(value)} />;
 }
+
+/** "4 · Good", or "Not rated" for an imported record the walk has not reached. */
+export const describeCondition = (value: number | null) => (value === null ? conditionLabel(null) : `${value} · ${conditionLabel(value)}`);

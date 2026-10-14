@@ -66,10 +66,10 @@ export const ASSET_TYPES: { name: string; category: AssetCategory; trackedIndivi
   { name: 'Storage Cabinet', category: 'furniture', trackedIndividually: false },
   { name: 'Whiteboard', category: 'furniture', trackedIndividually: false },
   { name: 'Fire Extinguisher', category: 'equipment', trackedIndividually: false },
-  // Equipment is tracked one record per unit so each can carry its own condition and note.
-  { name: 'Interactive Display', category: 'equipment', trackedIndividually: true },
-  { name: 'Projector', category: 'equipment', trackedIndividually: true },
-  { name: 'Document Camera', category: 'equipment', trackedIndividually: true },
+  // Technology and equipment are tracked one record per unit so each can carry its own condition and note.
+  { name: 'Interactive Display', category: 'technology', trackedIndividually: true },
+  { name: 'Projector', category: 'technology', trackedIndividually: true },
+  { name: 'Document Camera', category: 'technology', trackedIndividually: true },
   { name: 'Copier', category: 'equipment', trackedIndividually: true },
   { name: 'Refrigerator', category: 'equipment', trackedIndividually: true },
   { name: 'Commercial Range', category: 'equipment', trackedIndividually: true },
@@ -80,7 +80,7 @@ export const ASSET_TYPES: { name: string; category: AssetCategory; trackedIndivi
   { name: 'Scoreboard', category: 'equipment', trackedIndividually: true },
   { name: 'Water Fountain', category: 'equipment', trackedIndividually: true },
   { name: 'Wall-Pack HVAC', category: 'equipment', trackedIndividually: true },
-  { name: 'Network Switch', category: 'equipment', trackedIndividually: true },
+  { name: 'Network Switch', category: 'technology', trackedIndividually: true },
   // Systems serve a building or floor rather than a room.
   { name: 'Rooftop HVAC Unit', category: 'system', trackedIndividually: true },
   { name: 'Boiler', category: 'system', trackedIndividually: true },

@@ -17,7 +17,7 @@ Deeper docs: [`docs/architecture.md`](docs/architecture.md) (Mermaid system diag
 
 ## Run it locally
 
-Needs Node 22+ and Docker. One campus is seeded with 4 buildings, 36 rooms, two walkers' worth of progress and ~100 assets so the summary is not empty.
+Needs Node 22+ and Docker. One campus is seeded with 4 buildings, 36 rooms, two walkers' worth of progress and ~100 assets so the summary is not empty, and the sample district VLK supplied with the brief can be loaded next to it.
 
 ```bash
 npm install
@@ -25,9 +25,12 @@ cp .env.example .env            # defaults match docker-compose
 docker compose up -d            # Postgres 16 + RustFS (S3-compatible) with the photos bucket created
 npm run db:migrate
 npm run db:seed                 # Live Oak K-8 (also runs migrations)
+npm run db:import-sample        # Cedar Ridge ISD from data/sample: 2 campuses, 177 rooms, 838 asset records
 npm run dev                     # API on http://localhost:3000
 npm run dev:web                 # web on http://localhost:5173 (also on your LAN IP for a phone)
 ```
+
+`db:import-sample` loads a district's existing inventory (`data/sample/*.csv`, or a directory you pass) as the starting point for a walk, which is how a real engagement starts: the walk verifies what is on the books rather than building the list from nothing. Rated rows keep their rating, the person who gave it and the date; rows in rooms nobody has reached yet come in as **not rated**, and the office summary counts them. Nothing is attributed that the files do not say: they record when a room was walked but not by whom, so imported walks are credited to the district import rather than to whichever architect rated most of the room. Source ids (campus, building, floor, room, type, asset) and asset tags must be unique, as must floor levels and room numbers within their parent; a repeat is refused with both line numbers rather than letting the last row silently re-point everything that refers to it. Room types are stored as the district wrote them, categories are normalised onto ours (anything unrecognised becomes equipment, with a note), only the columns needed to place a row are required and extra columns are ignored, so another district's files need no code change. Everything is validated first and written in one transaction; a campus already in the database is skipped.
 
 No Docker? Set `DATABASE_URL=pglite://.data/pg` in `.env` for embedded Postgres; photos then live in memory until restart.
 
@@ -53,16 +56,16 @@ The stack prints the CloudFront URL. The first visit on each device asks for the
 **Field (phone):**
 
 1. **Who's walking today?** Enter your name. No login yet; the name goes on every room you mark and every change you make (see [What's next](#whats-next) for real authentication).
-2. **Projects.** Every campus you can walk. With one campus seeded, Live Oak K-8 in Cedar Valley ISD fills the screen.
+2. **Projects.** Every campus you can walk: Live Oak K-8 from the seed, and Bluebonnet Elementary and Cedar Ridge High School from the sample import.
 3. **Campus.** Address, principal's contact (tap to call or email), walk progress, and the list of buildings.
 4. **Building.** Address and site contact, a **Building systems** entry for assets with no room (rooftop units, corridor panels), and a floor dropdown that filters the rooms. The floor with the next unwalked room is selected first.
 5. **Room.** Walk status, a grid of photos of the room itself (add from the camera or the photo library), and the assets in the room. Each row opens the asset and has **Edit**, **Copy** (to any room, floor or building level) and **Delete** (with confirmation). **Add asset** is the primary action.
-6. **Add asset.** Photo first: it is resized on the phone, uploaded straight to object storage, and sent to Claude, which proposes the type, condition and a one-line note. Fix anything wrong, set the quantity (furniture is counted; equipment and systems are one record each), pick a condition from five big buttons, save. **What is it?** searches the shared catalogue as you type; if the thing in front of you is not in it, add it right there (name, category, counted or one-per-unit) and it is available to every walker, and to the photo suggestion, from then on.
-7. **Asset.** The photo large (tap for the photo screen), the facts, and Edit / Move / Copy / Delete plus the full history. **Edit** is its own screen; if someone else saved the same asset first you see who, what they changed, and can load their version before re-applying yours.
+6. **Add asset.** Photo first: it is resized on the phone, uploaded straight to object storage, and sent to Claude, which proposes the type, condition and a one-line note. Fix anything wrong, set the quantity (furniture is counted; technology, equipment and systems are one record each), pick a condition from five big buttons, save. **What is it?** searches the shared catalogue as you type; if the thing in front of you is not in it, add it right there (name, category, counted or one-per-unit) and it is available to every walker, and to the photo suggestion, from then on. Category belongs to the type, so **Change…** under a chosen type recategorises every asset of that type at once (projectors from equipment to technology, say), after a confirmation that spells out that it changes the catalogue for every campus.
+7. **Asset.** The photo large (tap for the photo screen), the facts (including make, model, serial and install year when the district's inventory had them), and Edit / Move / Copy / Delete plus the full history. An imported asset nobody has rated yet says so; editing it asks for a condition. **Edit** is its own screen; if someone else saved the same asset first you see who, what they changed, and can load their version before re-applying yours.
 8. **Photo.** One photo full-width with what it is of and the model's note if there was one.
-9. **Mark room walked** sends you back to the building with the next room highlighted.
+9. **Mark room walked** sends you back to the building with the next room highlighted. If imported assets in the room are still not rated, the room says how many, and marking it walked asks first ("Mark walked anyway" is there for items that could not be reached); a walked room with unrated assets keeps showing the count.
 
-**Office (laptop):** the campus summary at `/c/<campus>/summary`, a two-column dashboard on a desk and a single column on a phone: rooms walked and headline numbers, then rooms not yet walked grouped by building and floor (the office's first question, so it is first), assets in poor condition linking to the record, counts by type (sum of quantity; the top eight, with a toggle for the rest), a building filter, CSV export of assets and rooms, and CSV import of rooms (the rooms export is the template).
+**Office (laptop):** the campus summary at `/c/<campus>/summary`, a two-column dashboard on a desk and a single column on a phone: rooms walked and headline numbers (including how many imported assets are still unrated), then rooms not yet walked grouped by building and floor (the office's first question, so it is first), assets in poor condition linking to the record, counts by type (sum of quantity; the top eight, with a toggle for the rest), a building filter, CSV export of assets and rooms, and CSV import of rooms (the rooms export is the template).
 
 ## How it's built
 
@@ -105,7 +108,9 @@ Deliberately deferred: an object that was PUT but never recorded, or a draft pho
 
 **CSV import of rooms** is the realistic stand-in for "upload a floor plan": buildings and floors are created as needed, existing rooms keep their assets and walk status, the whole file is validated first and written in one transaction, and errors come back with line numbers.
 
-**Seed instead of create.** Architects do not create rooms in the field; the floor plan is known before the walk. So the field UI assigns assets to existing rooms, and rooms come from the seed or the CSV import.
+**Seed instead of create.** Architects do not create rooms in the field; the floor plan is known before the walk. So the field UI assigns assets to existing rooms, and rooms come from the seed, the CSV import, or a district's inventory (`db:import-sample`).
+
+**Lists are data, not code.** Asset categories live in an `asset_category` table (key, name, sort order, colour, whether new types in it default to one record per unit), seeded with Furniture, Technology, Equipment and System by migration. The type picker's chips and groups, the order a room's assets are listed in, and badge colours all read it, so a district that wants "Grounds" or "Kitchen" gets it with an insert; the inventory import matches category wording against the same table. There is no screen to add one yet, which is deliberate: someone should own that list, or it drifts into "Tech", "IT" and "Technology". A type's category can be changed in place because every asset follows its type. That is a catalogue-wide change made from the field form, unversioned and not in any history, unlike every asset edit; for now it is behind an explicit "Change for everyone" confirmation, and in production it belongs to a catalogue-maintainer role (with the authentication work in [What's next](#whats-next)) and a change log of its own. Copying an asset leaves its label behind along with photos and serial number, since the label is where an asset tag lives and one tag names one item. Room type is free text: it is only ever displayed, so a district's "Band Hall" or "Training Room" needs no code change. Condition is 1–5 or null; null means "on the inventory, not yet walked", which is a real state once a walk starts from existing records rather than an empty room.
 
 ## Technology considerations
 

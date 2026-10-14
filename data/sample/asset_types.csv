@@ -1,0 +1,38 @@
+asset_type_id,category,name,useful_life_years,typically_building_level
+AT-01,Furniture,Student Desk,15,false
+AT-02,Furniture,Student Chair,12,false
+AT-03,Furniture,Teacher Desk,20,false
+AT-04,Furniture,Bookshelf,25,false
+AT-05,Furniture,Filing Cabinet,25,false
+AT-06,Furniture,Cafeteria Table,15,false
+AT-07,Furniture,Lab Bench,25,false
+AT-08,Furniture,Conference Table,20,false
+AT-10,Technology,Interactive Display,8,false
+AT-11,Technology,Projector,7,false
+AT-12,Technology,Document Camera,7,false
+AT-13,Technology,Desktop Computer,5,false
+AT-14,Technology,Wireless Access Point,7,false
+AT-15,Technology,Network Switch,8,false
+AT-16,Technology,Sound System,12,false
+AT-20,Equipment,Fume Hood,20,false
+AT-21,Equipment,Emergency Eyewash,15,false
+AT-22,Equipment,Commercial Refrigerator,12,false
+AT-23,Equipment,Convection Oven,12,false
+AT-24,Equipment,Dishwasher,12,false
+AT-25,Equipment,Kiln,20,false
+AT-26,Equipment,Piano,40,false
+AT-27,Equipment,Basketball Goal,25,false
+AT-28,Equipment,Bleachers,30,false
+AT-29,Equipment,Weight Rack,20,false
+AT-30,Equipment,Ice Machine,10,false
+AT-31,Equipment,AED,10,false
+AT-40,Building System,Rooftop HVAC Unit,20,true
+AT-41,Building System,Boiler,30,true
+AT-42,Building System,Chiller,25,true
+AT-43,Building System,Water Heater,15,true
+AT-44,Building System,Main Electrical Panel,40,true
+AT-45,Building System,Fire Alarm Panel,20,true
+AT-46,Building System,Emergency Generator,30,true
+AT-47,Building System,Roof (Membrane),20,true
+AT-48,Building System,Elevator,25,true
+AT-49,Building System,Mini-Split AC,15,false

@@ -87,9 +87,8 @@ main { flex: 1; width: 100%; max-width: 760px; margin: 0 auto; padding: 16px 16p
 .badge { display: inline-block; font-size: 0.75rem; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: #e9ebe8; color: var(--muted); white-space: nowrap; }
 .badge.ok { background: #dcefdc; color: var(--c5); }
 .badge.warn { background: var(--warn-soft); color: #8a5a00; }
-.badge.cat-furniture { background: #e8eaf6; color: #3949ab; }
-.badge.cat-equipment { background: #e0f2f1; color: #00695c; }
-.badge.cat-system { background: #fbe9e7; color: #bf360c; }
+/* Category colour comes from the asset_category row as --cat; the background is a tint of it. */
+.badge.cat { --cat: var(--muted); color: var(--cat); background: #e9ebe8; background: color-mix(in srgb, var(--cat) 12%, #fff); }
 
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;
@@ -150,6 +149,7 @@ textarea.input { min-height: 80px; resize: vertical; }
 .cond.c2.selected { background: var(--c2); border-color: var(--c2); }
 .cond.c1.selected { background: var(--c1); border-color: var(--c1); }
 .dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; flex: none; }
+.dot.none { background: #fff; border: 2px solid var(--line); box-sizing: border-box; }
 .dot.c5 { background: var(--c5); } .dot.c4 { background: var(--c4); } .dot.c3 { background: var(--c3); } .dot.c2 { background: var(--c2); } .dot.c1 { background: var(--c1); }
 
 .stepper { display: flex; align-items: stretch; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: #fff; }
@@ -185,6 +185,7 @@ textarea.input { min-height: 80px; resize: vertical; }
 .history li:last-child { border-bottom: 0; }
 
 .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; }
+.stats.four { grid-template-columns: repeat(2, 1fr); } /* with the not-rated stat: two by two, not three and one */
 .stat { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px; }
 .stat .v { font-size: 1.6rem; font-weight: 700; }
 .stat .k { font-size: 0.8rem; color: var(--muted); }

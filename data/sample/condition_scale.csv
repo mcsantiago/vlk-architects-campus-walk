@@ -1,0 +1,6 @@
+rating,label,description
+1,Critical,Failed or unsafe; replace now
+2,Poor,Major wear; replace within 1-2 years
+3,Fair,Functional with visible wear
+4,Good,Minor wear
+5,Excellent,New or like new

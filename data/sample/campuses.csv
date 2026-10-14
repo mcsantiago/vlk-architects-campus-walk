@@ -1,0 +1,3 @@
+district_id,campus_id,name,campus_type,address,year_opened,site_acres
+D-01,C-100,Bluebonnet Elementary,Elementary,1200 Meadowlark Ln,1987,11.5
+D-01,C-200,Cedar Ridge High School,High School,4500 Ridgeview Pkwy,2004,62.0

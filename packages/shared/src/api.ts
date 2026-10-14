@@ -1,5 +1,4 @@
 import { z } from 'zod';
-import { ASSET_CATEGORIES, ROOM_TYPES } from './domain.ts';
 
 /** Request schemas shared by the API (validation) and the web app (form types). */
 
@@ -15,13 +14,25 @@ export const USER_HEADER = 'x-user-id';
 export const CreateUserInput = z.object({ name: z.string().trim().min(1).max(60) });
 export type CreateUserInput = z.infer<typeof CreateUserInput>;
 
+/** A category key; whether it exists is the database's call (asset_category), not a list in code. */
+const categoryKey = z.string().trim().min(1).max(40);
+
 /** A walker can add a type from the field; names are matched case-insensitively so "kiln" finds "Kiln". */
 export const CreateAssetTypeInput = z.object({
   name: z.string().trim().min(1).max(60),
-  category: z.enum(ASSET_CATEGORIES),
+  category: categoryKey,
   trackedIndividually: z.boolean(),
 });
 export type CreateAssetTypeInput = z.infer<typeof CreateAssetTypeInput>;
+
+/** Recategorise a type (every asset of that type follows) or change how it is counted. The name stays. */
+export const UpdateAssetTypeInput = z
+  .object({
+    category: categoryKey.optional(),
+    trackedIndividually: z.boolean().optional(),
+  })
+  .refine((u) => u.category !== undefined || u.trackedIndividually !== undefined, { message: 'nothing to change' });
+export type UpdateAssetTypeInput = z.infer<typeof UpdateAssetTypeInput>;
 
 /**
  * Where an asset lives. Any subset may be sent; the server resolves the rest
@@ -38,12 +49,22 @@ export const LocationInput = z
   });
 export type LocationInput = z.infer<typeof LocationInput>;
 
+/** Make, model, serial and install year: carried over from a district's inventory, shown read-only in the field. */
+const provenanceFields = {
+  manufacturer: optionalText(80),
+  model: optionalText(80),
+  serialNumber: optionalText(80),
+  installYear: z.int().min(1800).max(2200).nullable().optional(),
+};
+
 const assetFields = {
   assetTypeId: uuid,
   label: optionalText(80),
   quantity: z.int().min(1).max(10_000).default(1),
-  condition: z.int().min(1).max(5),
+  /** Null means not yet rated: an imported record the walk has not reached. The field form always sends one. */
+  condition: z.int().min(1).max(5).nullable().default(null),
   notes: optionalText(2_000),
+  ...provenanceFields,
 };
 
 export const CreateAssetInput = LocationInput.safeExtend({
@@ -60,8 +81,9 @@ export const UpdateAssetInput = z.object({
   assetTypeId: assetFields.assetTypeId.optional(),
   label: assetFields.label,
   quantity: z.int().min(1).max(10_000).optional(),
-  condition: assetFields.condition.optional(),
+  condition: z.int().min(1).max(5).nullable().optional(),
   notes: assetFields.notes,
+  ...provenanceFields,
 });
 export type UpdateAssetInput = z.infer<typeof UpdateAssetInput>;
 
@@ -132,6 +154,6 @@ export const RoomImportRow = z.object({
   floor_name: z.string().trim().max(60),
   room_number: z.string().trim().min(1).max(20),
   room_name: z.string().trim().max(120),
-  room_type: z.enum(ROOM_TYPES),
+  room_type: z.string().trim().min(1).max(40),
 });
 export type RoomImportRow = z.infer<typeof RoomImportRow>;

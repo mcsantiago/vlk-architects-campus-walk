@@ -3,6 +3,7 @@ import { useRef, useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { API_URL } from '../api/client';
 import { useImportRooms, useSummary, useTree } from '../api/queries';
+import { CategoryBadge } from '../components/CategoryBadge';
 import { ConditionDot } from '../components/ConditionPicker';
 import { ErrorNotice, Loading, Page } from '../components/Page';
 
@@ -71,7 +72,7 @@ export function SummaryPage() {
           )}
         </div>
 
-        <div className="stats">
+        <div className={`stats${s.notRated.records > 0 ? ' four' : ''}`}>
           <div className="stat">
             <div className="v">{s.rooms.notWalked.length}</div>
             <div className="k">rooms left to walk</div>
@@ -92,6 +93,15 @@ export function SummaryPage() {
               {records !== units && <>, {records.toLocaleString()} records</>}
             </div>
           </div>
+          {s.notRated.records > 0 && (
+            <div className="stat">
+              <div className="v">{s.notRated.records}</div>
+              <div className="k">
+                assets not yet rated
+                {s.notRated.units !== s.notRated.records && <>, {s.notRated.units.toLocaleString()} units</>}
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="section card unwalked">
@@ -168,7 +178,7 @@ export function SummaryPage() {
                 {shownTypes.map((t) => (
                   <tr key={t.assetTypeId}>
                     <td>
-                      {t.name} <span className={`badge cat-${t.category}`}>{t.category}</span>
+                      {t.name} <CategoryBadge category={t.category} />
                       <div className="bar" style={{ width: `${(100 * t.units) / maxUnits}%`, marginTop: 6 }} />
                     </td>
                     <td className="num">

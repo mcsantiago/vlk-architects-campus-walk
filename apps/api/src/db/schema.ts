@@ -13,7 +13,6 @@ import {
   uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
-import { ASSET_CATEGORIES } from '@campus-walk/shared';
 
 const id = () => uuid('id').primaryKey().defaultRandom();
 const createdAt = () => timestamp('created_at', { withTimezone: true }).notNull().defaultNow();
@@ -108,22 +107,39 @@ export const room = pgTable(
   ],
 );
 
-export const assetType = pgTable(
-  'asset_type',
+/**
+ * The groups a type falls into (furniture, technology, …). Data, not code: the picker, the room
+ * listing's order and the badge colours all read this table. Keyed by a stable slug so asset
+ * types and the API refer to "technology" rather than a uuid. The four defaults are inserted by
+ * migration 0003; there is no UI to add one yet.
+ */
+export const assetCategory = pgTable(
+  'asset_category',
   {
-    id: id(),
+    key: text('key').primaryKey(),
     name: text('name').notNull().unique(),
-    category: text('category', { enum: ASSET_CATEGORIES }).notNull(),
-    /** Equipment/systems are tracked one record per unit; furniture is counted via quantity. */
-    trackedIndividually: boolean('tracked_individually').notNull(),
+    /** The order a walker scans a room in, and the order groups are listed. */
+    sortOrder: integer('sort_order').notNull(),
+    /** Badge colour, #rrggbb; the badge background is a tint of it. */
+    color: text('color').notNull(),
+    /** What "one record per unit" starts as when a walker adds a type in this category. */
+    trackedByDefault: boolean('tracked_by_default').notNull(),
   },
   (t) => [
-    check(
-      'asset_type_category_ck',
-      sql`${t.category} IN (${sql.raw(ASSET_CATEGORIES.map((c) => `'${c}'`).join(', '))})`,
-    ),
+    check('asset_category_key_ck', sql`${t.key} ~ '^[a-z][a-z0-9-]*$'`),
+    check('asset_category_color_ck', sql`${t.color} ~ '^#[0-9a-fA-F]{6}$'`),
   ],
 );
+
+export const assetType = pgTable('asset_type', {
+  id: id(),
+  name: text('name').notNull().unique(),
+  category: text('category')
+    .notNull()
+    .references(() => assetCategory.key),
+  /** One record per unit (each with its own condition), or counted with a quantity. */
+  trackedIndividually: boolean('tracked_individually').notNull(),
+});
 
 /**
  * An asset always belongs to a building; floor and room optionally narrow its location.
@@ -146,8 +162,14 @@ export const asset = pgTable(
       .references(() => assetType.id),
     label: text('label'),
     quantity: integer('quantity').notNull().default(1),
-    condition: integer('condition').notNull(),
+    /** Null until rated: an imported inventory row the walk has not reached yet. */
+    condition: integer('condition'),
     notes: text('notes'),
+    /** Carried over from a district's inventory; not edited in the field. */
+    manufacturer: text('manufacturer'),
+    model: text('model'),
+    serialNumber: text('serial_number'),
+    installYear: integer('install_year'),
     version: integer('version').notNull().default(1),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
@@ -170,7 +192,8 @@ export const asset = pgTable(
       foreignColumns: [room.id, room.floorId],
     }),
     check('asset_room_needs_floor_ck', sql`${t.roomId} IS NULL OR ${t.floorId} IS NOT NULL`),
-    check('asset_condition_ck', sql`${t.condition} BETWEEN 1 AND 5`),
+    check('asset_condition_ck', sql`${t.condition} IS NULL OR ${t.condition} BETWEEN 1 AND 5`),
+    check('asset_install_year_ck', sql`${t.installYear} IS NULL OR ${t.installYear} BETWEEN 1800 AND 2200`),
     check('asset_quantity_ck', sql`${t.quantity} >= 1`),
     index('asset_building_idx').on(t.buildingId).where(sql`${t.deletedAt} IS NULL`),
     index('asset_room_idx').on(t.roomId).where(sql`${t.deletedAt} IS NULL`),

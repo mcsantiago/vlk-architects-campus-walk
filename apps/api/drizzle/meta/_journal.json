@@ -15,6 +15,20 @@
       "when": 1791844730474,
       "tag": "0001_contacts_room_photos",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1792016776489,
+      "tag": "0002_technology_unrated_provenance",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1792018380808,
+      "tag": "0003_asset_category_table",
+      "breakpoints": true
     }
   ]
 }

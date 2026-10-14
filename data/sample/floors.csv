@@ -1,0 +1,11 @@
+floor_id,building_id,level,name
+B-101-F1,B-101,1,First Floor
+B-101-F2,B-101,2,Second Floor
+B-102-F1,B-102,1,First Floor
+B-103-F1,B-103,1,First Floor
+B-201-F1,B-201,1,First Floor
+B-201-F2,B-201,2,Second Floor
+B-201-F3,B-201,3,Third Floor
+B-202-F1,B-202,1,First Floor
+B-203-F1,B-203,1,First Floor
+B-204-F1,B-204,1,First Floor

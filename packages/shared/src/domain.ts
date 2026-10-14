@@ -15,10 +15,18 @@ export type Condition = (typeof CONDITIONS)[number]['value'];
 /** Assets at or below this rating show up in the office "poor condition" list. */
 export const POOR_CONDITION_MAX = 2;
 
-export const ASSET_CATEGORIES = ['furniture', 'equipment', 'system'] as const;
-export type AssetCategory = (typeof ASSET_CATEGORIES)[number];
+/**
+ * A category's key, e.g. "technology". The list itself lives in the asset_category table
+ * (GET /asset-categories); nothing in code depends on which categories exist.
+ */
+export type AssetCategory = string;
 
-export const ROOM_TYPES = [
+/**
+ * Room type is free text: it comes from the district's floor plan or inventory and is only ever
+ * shown, never branched on, so a "Band Hall" or "Training Room" needs no code change. These are
+ * the examples the import template documents and the seed uses.
+ */
+export const ROOM_TYPE_EXAMPLES = [
   'classroom',
   'lab',
   'library',
@@ -32,8 +40,12 @@ export const ROOM_TYPES = [
   'corridor',
   'other',
 ] as const;
-export type RoomType = (typeof ROOM_TYPES)[number];
+export type RoomType = string;
 
-export function conditionLabel(value: number): string {
+/** Null is an asset that is on the books but has not been rated on a walk yet. */
+export const NOT_RATED = 'Not rated';
+
+export function conditionLabel(value: number | null): string {
+  if (value === null) return NOT_RATED;
   return CONDITIONS.find((c) => c.value === value)?.label ?? 'Unknown';
 }

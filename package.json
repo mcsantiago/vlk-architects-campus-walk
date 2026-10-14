@@ -16,6 +16,7 @@
     "db:generate": "npm run db:generate -w @campus-walk/api",
     "db:migrate": "npm run db:migrate -w @campus-walk/api",
     "db:seed": "npm run db:seed -w @campus-walk/api",
+    "db:import-sample": "npm run db:import-sample -w @campus-walk/api",
     "deploy": "npm run build:web && npm run deploy -w infra",
     "synth": "npm run synth -w infra"
   },
