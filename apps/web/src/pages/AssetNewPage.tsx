@@ -8,7 +8,6 @@ import { LocationPicker, describeLocation, type Location } from '../components/L
 import { ErrorNotice, Loading, Page } from '../components/Page';
 import { PhotoSection } from '../components/PhotoSection';
 import { SuggestionNotice } from '../components/SuggestionNotice';
-import { rememberType } from '../components/TypePicker';
 
 /**
  * Add an asset where the walker is standing. The photo comes first because the suggestion
@@ -94,7 +93,6 @@ export function AssetNewPage() {
       notes: fields.notes.trim() || null,
       photoIds: photos.map((p) => p.id),
     });
-    rememberType(fields.assetTypeId);
     navigate(back);
   }
 

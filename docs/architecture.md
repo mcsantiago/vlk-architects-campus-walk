@@ -290,7 +290,7 @@ flowchart TB
     client["client.ts\nfetch wrapper · x-user-id · ApiError(status, details)"]
     queries["queries.ts\nTanStack Query hooks + invalidation"]
     photos["photos.ts\nshrinkImage (canvas, ≤1600px JPEG) → POST /uploads → PUT → POST /photos"]
-    user["user.ts\nchosen user + recent types in localStorage"]
+    user["user.ts\nchosen user + last name in localStorage"]
   end
 
   subgraph pages["Pages"]

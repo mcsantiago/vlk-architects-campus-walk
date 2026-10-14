@@ -10,7 +10,6 @@ import { useUnsavedChangesGuard } from '../components/UnsavedChanges';
 import { describeLocation } from '../components/LocationPicker';
 import { ErrorNotice, Loading, Page } from '../components/Page';
 import { PhotoSection } from '../components/PhotoSection';
-import { rememberType } from '../components/TypePicker';
 
 const toFields = (a: AssetView): AssetFieldValues => ({
   assetTypeId: a.assetType.id,
@@ -97,7 +96,6 @@ export function AssetEditPage() {
         label: fields.label.trim() || null,
         notes: fields.notes.trim() || null,
       });
-      rememberType(fields.assetTypeId);
       // Saved: the form is about to unmount, so its pre-save dirty flag must not block this.
       if (!mounted.current) return;
       allowNextNavigation();

@@ -3,15 +3,6 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useRef, useState } from 'react';
 import { describeError } from '../api/client';
 import { keys, useCreateAssetType } from '../api/queries';
-import { readPref, writePref } from '../user';
-
-const RECENT_KEY = 'recent-types';
-const RECENT_MAX = 6;
-
-export function rememberType(id: string): void {
-  const recent = readPref<string[]>(RECENT_KEY, []).filter((r) => r !== id);
-  writePref(RECENT_KEY, [id, ...recent].slice(0, RECENT_MAX));
-}
 
 const categoryLabel = (c: AssetCategory) => c[0]!.toUpperCase() + c.slice(1);
 /** Furniture is counted; anything else gets one record per unit unless the walker says otherwise. */
@@ -33,7 +24,7 @@ interface TypePickerProps {
  * filter. Filtering is in memory on the phone; the list comes from one GET, cached, and is
  * refreshed in the background each time the dropdown opens. When nothing matches, the walker
  * adds the type from here, with category and counting chosen inline, and it is selected as
- * soon as it is saved. Recently used types sit above as chips.
+ * soon as it is saved.
  */
 export function TypePicker({ types, value, onChange }: TypePickerProps) {
   const qc = useQueryClient();
@@ -44,9 +35,6 @@ export function TypePicker({ types, value, onChange }: TypePickerProps) {
   const create = useCreateAssetType();
 
   const selected = types.find((t) => t.id === value) ?? null;
-  const recent = readPref<string[]>(RECENT_KEY, [])
-    .map((id) => types.find((t) => t.id === id))
-    .filter((t): t is AssetTypeView => !!t);
 
   const name = query.trim();
   const q = name.toLowerCase();
@@ -89,15 +77,6 @@ export function TypePicker({ types, value, onChange }: TypePickerProps) {
 
   return (
     <div className="stack" style={{ gap: 8 }}>
-      {recent.length > 0 && (
-        <div className="chips">
-          {recent.map((t) => (
-            <button key={t.id} type="button" className={`chip${value === t.id ? ' selected' : ''}`} onClick={() => pick(t.id)}>
-              {t.name}
-            </button>
-          ))}
-        </div>
-      )}
       <div className="combo">
         <input
           ref={input}

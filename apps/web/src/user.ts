@@ -47,7 +47,7 @@ export function useCurrentUser(): UserRef | null {
   );
 }
 
-/** Small per-device preferences (recent asset types) with the same storage rules. */
+/** Small per-device preferences (the last walker name) with the same storage rules. */
 export function readPref<T>(key: string, fallback: T): T {
   try {
     const raw = localStorage.getItem(`campus-walk.${key}`);
