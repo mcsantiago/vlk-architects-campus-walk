@@ -25,7 +25,8 @@ export interface StoredObject {
 export interface PhotoStorage {
   presignUpload(key: string, contentType: ImageContentType): Promise<string>;
   presignDownload(key: string): Promise<string>;
-  get(key: string): Promise<StoredObject | null>;
+  /** Reads the object, or only its first `maxBytes` when given (a caller caps size without a HEAD). */
+  get(key: string, maxBytes?: number): Promise<StoredObject | null>;
   delete(key: string): Promise<void>;
   /**
    * A view of this storage whose presigned URLs the given client can reach. `host` is the
@@ -116,13 +117,17 @@ export class S3PhotoStorage implements PhotoStorage {
     return getSignedUrl(this.signer ?? this.client, cmd, { expiresIn: URL_TTL_SECONDS });
   }
 
-  async get(key: string): Promise<StoredObject | null> {
+  async get(key: string, maxBytes?: number): Promise<StoredObject | null> {
     try {
-      const out = await this.client.send(new GetObjectCommand({ Bucket: this.bucket, Key: key }));
+      const range = maxBytes ? `bytes=0-${maxBytes - 1}` : undefined;
+      const out = await this.client.send(new GetObjectCommand({ Bucket: this.bucket, Key: key, Range: range }));
       if (!out.Body) return null;
       return { bytes: await out.Body.transformToByteArray(), contentType: out.ContentType ?? 'application/octet-stream' };
     } catch (err) {
-      if ((err as { name?: string }).name === 'NoSuchKey') return null;
+      const name = (err as { name?: string }).name;
+      if (name === 'NoSuchKey') return null;
+      // A ranged read of a zero-byte object is "InvalidRange": the object exists and is empty.
+      if (name === 'InvalidRange') return { bytes: new Uint8Array(), contentType: 'application/octet-stream' };
       throw err;
     }
   }
@@ -145,8 +150,10 @@ export class MemoryPhotoStorage implements PhotoStorage {
   async presignDownload(key: string) {
     return `memory://${key}`;
   }
-  async get(key: string) {
-    return this.objects.get(key) ?? null;
+  async get(key: string, maxBytes?: number) {
+    const object = this.objects.get(key);
+    if (!object) return null;
+    return maxBytes && object.bytes.byteLength > maxBytes ? { ...object, bytes: object.bytes.slice(0, maxBytes) } : object;
   }
   async delete(key: string) {
     this.objects.delete(key);

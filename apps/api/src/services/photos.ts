@@ -1,5 +1,5 @@
 import { and, eq, inArray, isNull } from 'drizzle-orm';
-import { IMAGE_CONTENT_TYPES, type AiSuggestion, type CreatePhotoInput, type ImageContentType } from '@campus-walk/shared';
+import type { AiSuggestion, CreatePhotoInput, ImageContentType } from '@campus-walk/shared';
 import type { Db } from '../db/client.ts';
 import * as s from '../db/schema.ts';
 import { badRequest, notFound } from '../errors.ts';
@@ -14,6 +14,24 @@ export interface PhotoView {
   url: string;
   suggestion: AiSuggestion | null;
   createdAt: Date;
+}
+
+/**
+ * The API never decodes an image (the browser resizes, the model reads), so the checks here are
+ * what the first bytes say the file is, and how big it is. 10 MB is far above the ~300 KB the
+ * web app produces and below anything that should sit in memory per request.
+ */
+export const MAX_PHOTO_BYTES = 10 * 1024 * 1024;
+
+const PNG_MAGIC = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+const ascii = (bytes: Uint8Array, start: number, end: number) => String.fromCharCode(...bytes.subarray(start, end));
+
+/** The image type the bytes actually are, from their signature, or null for anything else. */
+export function sniffImageType(bytes: Uint8Array): ImageContentType | null {
+  if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return 'image/jpeg';
+  if (bytes.length >= 8 && PNG_MAGIC.every((b, i) => bytes[i] === b)) return 'image/png';
+  if (bytes.length >= 12 && ascii(bytes, 0, 4) === 'RIFF' && ascii(bytes, 8, 12) === 'WEBP') return 'image/webp';
+  return null;
 }
 
 /** Step 1 of the field flow: the phone asks for somewhere to PUT the photo. */
@@ -35,8 +53,10 @@ async function toView(storage: PhotoStorage, row: typeof s.photo.$inferSelect): 
 
 /**
  * Step 2: once the PUT finished, record the object as a photo and ask the model about it.
- * The suggestion is stored with the photo so the office can later see what was proposed
- * versus what the walker chose.
+ * The photo row is written before the model is asked, so a slow or failing model (or a
+ * crash mid-call) can never lose the walker's photo; the suggestion is added when it arrives.
+ * It is stored with the photo so the office can later see what was proposed versus what the
+ * walker chose.
  */
 export async function createPhoto(
   db: Db,
@@ -53,21 +73,38 @@ export async function createPhoto(
     if (!room) throw notFound('room');
   }
 
-  const object = await storage.get(input.s3Key);
+  const object = await storage.get(input.s3Key, MAX_PHOTO_BYTES + 1);
   if (!object) throw badRequest('upload not found; PUT the file to the upload URL first');
-  const contentType = IMAGE_CONTENT_TYPES.find((t) => t === object.contentType);
-  if (!contentType) throw badRequest(`unsupported image type ${object.contentType}`);
+  if (object.bytes.byteLength > MAX_PHOTO_BYTES) throw badRequest(`image is larger than ${MAX_PHOTO_BYTES / 1024 / 1024} MB`);
+  const contentType = sniffImageType(object.bytes);
+  if (!contentType) throw badRequest('upload is not a JPEG, PNG or WebP image');
+  if (object.contentType !== contentType) throw badRequest(`upload is ${contentType} but was sent as ${object.contentType}`);
 
+  // Everything that can fail for a good reason happens before the insert; after it, only the model.
   const assetTypes = await db
     .select({ id: s.assetType.id, name: s.assetType.name, category: s.assetType.category })
     .from(s.assetType);
-  const suggestion = await suggester.suggest({ bytes: object.bytes, contentType, assetTypes });
-
-  const [row] = await db
+  const [inserted] = await db
     .insert(s.photo)
-    .values({ assetId: input.assetId ?? null, roomId: input.roomId ?? null, s3Key: input.s3Key, aiSuggestion: suggestion })
+    .values({ assetId: input.assetId ?? null, roomId: input.roomId ?? null, s3Key: input.s3Key, aiSuggestion: null })
     .returning();
-  return toView(storage, row!);
+  // A Suggester is expected to return null on failure; this guards one that throws anyway.
+  const suggestion = await suggester.suggest({ bytes: object.bytes, contentType, assetTypes }).catch((err: unknown) => {
+    console.warn('suggestion failed', err);
+    return null;
+  });
+  if (!suggestion) return toView(storage, inserted!);
+  // The photo is already saved; losing the suggestion is a warning, not a failed request.
+  const [row] = await db
+    .update(s.photo)
+    .set({ aiSuggestion: suggestion })
+    .where(eq(s.photo.id, inserted!.id))
+    .returning()
+    .catch((err: unknown) => {
+      console.warn('could not store the suggestion', err);
+      return [inserted!];
+    });
+  return toView(storage, row ?? inserted!);
 }
 
 export async function getPhoto(db: Db, storage: PhotoStorage, id: string): Promise<PhotoView | null> {

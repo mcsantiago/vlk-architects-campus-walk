@@ -128,16 +128,18 @@ sequenceDiagram
   P->>S3: PUT image bytes (direct, CORS)
   P->>API: POST /photos {s3Key}
   API->>API: key matches PHOTO_KEY? not already recorded?
-  API->>S3: GET object bytes
+  API->>S3: GET object, first 10 MB + 1 (ranged)
+  API->>API: too big? magic bytes say JPEG/PNG/WebP and agree with the declared type?
   API->>D: SELECT asset_type (names for the prompt)
-  API->>B: messages.parse(image + type list, zod output format, effort low)
+  API->>D: INSERT photo {s3Key, assetId: null, ai_suggestion: null}
+  API->>B: messages.parse(image + type list, zod output format, effort low, 20 s per attempt, 1 retry)
   alt parsed and useful
     B-->>API: {asset_type, condition, confidence, note}
     API->>API: normalizeSuggestion → resolve type name → id
-  else refusal / malformed / error / > 4.5 MB
-    API->>API: suggestion = null (form opens empty)
+    API->>D: UPDATE photo SET ai_suggestion
+  else refusal / malformed / error / timeout / > 4.5 MB
+    API->>API: suggestion = null (form opens empty; photo already saved)
   end
-  API->>D: INSERT photo {s3Key, assetId: null, ai_suggestion}
   API-->>P: photo {id, url (presigned GET), suggestion}
   P->>P: pre-fill type + condition + note; walker confirms or edits
   P->>API: POST /assets {roomId, assetTypeId, condition, notes, photoIds:[id]}

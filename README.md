@@ -91,13 +91,17 @@ docs/            architecture diagrams, API contract
 
 **Counted vs tracked.** Furniture is a count (`quantity`), equipment and systems are one record each (`tracked_individually` on the type, enforced by the API). This matches how assessments are written up, keeps the walk fast, and avoids trying to match the same chair across photos.
 
-**Identity without auth (deliberately temporary).** The walker picks a name once; the API finds-or-creates the user and the client sends the id as `x-user-id` on writes. It becomes `changed_by` on every asset event and the room's walker. This gives the audit trail a person without a login flow, which is what a take-home needs, but it is not an authentication layer: anyone who can reach the API can write as anyone. It is the first thing to replace before real use; see [What's next](#whats-next).
+**Identity without auth (deliberately temporary).** The walker picks a name once; the API finds-or-creates the user and the client sends the id as `x-user-id` on writes. It becomes `changed_by` on every asset event and the room's walker. This gives the audit trail a person without a login flow, which is what a take-home needs, but it is not an authentication layer: anyone who can reach the API can write as anyone. It is the first thing to replace before real use; see [What's next](#whats-next). The access code in the deployment stack is a demo gate on the URL, not authentication either.
 
 **Two walkers at once.** Every asset carries a `version`. Writes send the version they read; a stale one gets a 409 with the current record and nothing is written. The UI shows who changed it and what, and offers their version to start from. Marking a room walked is idempotent and last-writer-wins on purpose.
 
 **History.** Every create, update, move and delete writes an `asset_event` with before/after snapshots and who did it. Deletes are soft so the history keeps pointing at something.
 
 **Photo flow.** `POST /uploads` mints a key and a presigned PUT; the phone resizes to ≤1600px JPEG and PUTs directly; `POST /photos` records the object and runs the suggestion. Photos can be taken before the asset exists and attached on create, which is the natural order in the field. The suggestion is stored on the photo for audit even after the walker overrides it.
+
+Before recording a photo the API checks what the bytes are, not what the PUT claimed: the first bytes must carry a JPEG, PNG or WebP signature that agrees with the declared type, and it reads at most 10 MB (a ranged GET, so an oversized object is never pulled into memory). It never decodes the image; the browser does when resizing and the model does when looking, so decompression risk stays off the server. The photo row is written before the model is asked, and the model call gets 20 seconds per attempt with one retry (under a minute worst case, against the SDK's ten-minute default), so a slow or failing model leaves the form empty but never the photo unsaved.
+
+Deliberately deferred: an object that was PUT but never recorded, or a draft photo taken on the add-asset screen and then abandoned, stays behind (an object, and for drafts a row). Keys are unguessable UUIDs minted by the API and the objects are a few hundred KB, so the cost is storage, not exposure. Removing a draft photo on the add-asset screen does delete it. The production fix is a scheduled sweep: objects older than a day with no photo row, and unattached photo rows older than a day. Photos also carry no uploader; that belongs with the authentication work in [What's next](#whats-next).
 
 **CSV import of rooms** is the realistic stand-in for "upload a floor plan": buildings and floors are created as needed, existing rooms keep their assets and walk status, the whole file is validated first and written in one transaction, and errors come back with line numbers.
 
@@ -135,6 +139,7 @@ Two different things:
 
 - **In the product**, Claude on Bedrock looks at the photo and suggests the asset type, condition and a note. Scoped deliberately small: one image, a fixed list of types, structured output, and every field editable. The suggestion is kept on the photo so the office can see what the model said versus what the walker chose.
 - **In building it**, I used Claude Code as a pair: scaffolding, the Drizzle schema from my data model, route and test boilerplate, the CSV parser, the headless UI walk-through, and the diagrams. The data model, location rules, concurrency approach, what to cut and the tooling choices above are mine; everything generated was reviewed and most of it reshaped. The git history reflects the actual sequence of work.
+- **One concrete correction.** The generated seed wrote asset-event snapshots in database shape (type as a foreign key), so the history screen rendered "Recorded 2 ×, condition 4" with no type name. The headless walk-through caught it; the snapshot now matches the API shape and the screen has a fallback for old events. Another, in the product itself: a model answer naming a type outside the catalogue is dropped to null rather than shown, because a confident wrong label costs the walker more than an empty field.
 
 ## What's next
 

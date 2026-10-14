@@ -1,6 +1,7 @@
 import type { AiSuggestion, PhotoView } from '@campus-walk/shared';
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router';
+import { api } from '../api/client';
 import { useAssetTypes, useCreateAsset, useTree } from '../api/queries';
 import { AssetFields, emptyFields, locationBody, type AssetFieldValues } from '../components/AssetFields';
 import { LocationPicker, describeLocation, type Location } from '../components/LocationPicker';
@@ -51,6 +52,12 @@ export function AssetNewPage() {
     : loc
       ? `/c/${campusId}/buildings/${loc.buildingId}/systems`
       : `/c/${campusId}`;
+
+  /** A draft photo has a record and an object already; removing it here removes both. */
+  function removeDraftPhoto(photo: PhotoView) {
+    setPhotos((ps) => ps.filter((x) => x.id !== photo.id));
+    void api<void>(`/photos/${photo.id}`, { method: 'DELETE' }).catch(() => {});
+  }
 
   function onPhotoAdded(photo: PhotoView) {
     setPhotos((p) => [...p, photo]);
@@ -110,7 +117,7 @@ export function AssetNewPage() {
       >
         <div className="field">
           <label>Photo</label>
-          <PhotoSection photos={photos} subject={null} onAdded={onPhotoAdded} onRemove={(p) => setPhotos((ps) => ps.filter((x) => x.id !== p.id))} />
+          <PhotoSection photos={photos} subject={null} onAdded={onPhotoAdded} onRemove={removeDraftPhoto} />
           {suggestion && <SuggestionNotice suggestion={suggestion} />}
         </div>
 

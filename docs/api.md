@@ -312,8 +312,8 @@ Record an uploaded object and run the AI suggestion over it. **Auth:** required.
 { "s3Key": "photos/<uuid>.jpg", "assetId": "uuid | null", "roomId": "uuid | null" }   // at most one of assetId / roomId
 ```
 Omit both for a photo taken before the asset exists (attach it via `POST /assets { photoIds }`); send `roomId` for a photo of the room itself.
-**201** → `Photo` (with `suggestion`, which may be null).
-**400** `"unknown upload key"` (not a key this API minted); `"upload not found; PUT the file to the upload URL first"`; `"photo already recorded for this upload"`; `"unsupported image type ..."`; both `assetId` and `roomId` given.
+**201** → `Photo` (with `suggestion`, which may be null: model off, unsure, slow or failing; the photo is saved regardless).
+**400** `"unknown upload key"` (not a key this API minted); `"upload not found; PUT the file to the upload URL first"`; `"photo already recorded for this upload"`; `"upload is not a JPEG, PNG or WebP image"` (by its bytes); `"upload is image/png but was sent as image/jpeg"`; `"image is larger than 10 MB"`; both `assetId` and `roomId` given.
 **404** `assetId` or `roomId` unknown.
 
 ### `GET /photos/:id`

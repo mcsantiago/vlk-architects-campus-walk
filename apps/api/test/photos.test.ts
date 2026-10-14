@@ -8,11 +8,23 @@ import { CAMPUS } from '../src/db/seed-data.ts';
 import { MemoryPhotoStorage } from '../src/storage.ts';
 import { normalizeSuggestion, type Suggester, type SuggestionInput } from '../src/suggest.ts';
 import { freshDb } from './helpers.ts';
+import { MAX_PHOTO_BYTES, sniffImageType } from '../src/services/photos.ts';
 
 const TYPES = [
   { id: randomUUID(), name: 'Projector', category: 'equipment' },
   { id: randomUUID(), name: 'Student Desk', category: 'furniture' },
 ];
+
+describe('sniffImageType', () => {
+  it('reads the signature and ignores everything else', () => {
+    expect(sniffImageType(new Uint8Array([0xff, 0xd8, 0xff, 0xe0]))).toBe('image/jpeg');
+    expect(sniffImageType(new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0]))).toBe('image/png');
+    expect(sniffImageType(new TextEncoder().encode('RIFF....WEBPVP8 '))).toBe('image/webp');
+    expect(sniffImageType(new TextEncoder().encode('RIFF....WAVEfmt '))).toBeNull();
+    expect(sniffImageType(new Uint8Array([0xff, 0xd8]))).toBeNull();
+    expect(sniffImageType(new Uint8Array())).toBeNull();
+  });
+});
 
 describe('normalizeSuggestion', () => {
   it('resolves the type by name, case-insensitively', () => {
@@ -65,9 +77,11 @@ describe('photo flow', () => {
   const storage = new MemoryPhotoStorage();
   const calls: SuggestionInput[] = [];
   let canned: AiSuggestion | null = null;
+  let fail = false;
   const suggester: Suggester = {
     async suggest(input) {
       calls.push(input);
+      if (fail) throw new Error('model unavailable');
       return canned;
     },
   };
@@ -82,12 +96,18 @@ describe('photo flow', () => {
     return { status: res.status, body: text ? JSON.parse(text) : null };
   }
 
-  /** Simulates the phone's PUT to the presigned URL. */
+  const SIGNATURE: Record<string, Uint8Array> = {
+    'image/jpeg': new Uint8Array([0xff, 0xd8, 0xff, 0xe0]),
+    'image/png': new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    'image/webp': new TextEncoder().encode('RIFF....WEBPVP8 '),
+  };
+
+  /** Simulates the phone's PUT to the presigned URL, with bytes that are what they claim to be. */
   async function upload(contentType = 'image/jpeg') {
     const { status, body } = await call('POST', '/uploads', { contentType });
     expect(status).toBe(201);
     expect(body.url).toBe(`memory://upload/${body.key}`);
-    storage.put(body.key, new Uint8Array([0xff, 0xd8, 0xff]), contentType);
+    storage.put(body.key, SIGNATURE[contentType]!, contentType);
     return body.key as string;
   }
 
@@ -188,6 +208,56 @@ describe('photo flow', () => {
     const detail2 = (await call('GET', `/photos/${assetPhoto.photos[0].id}`)).body;
     expect(detail2).toMatchObject({ asset: { id: assetPhoto.id }, room: null });
     expect((await call('GET', `/photos/${randomUUID()}`)).status).toBe(404);
+  });
+
+  it('checks what the bytes are, not what the PUT claimed, and caps the size', async () => {
+    const mint = async (contentType: string) => (await call('POST', '/uploads', { contentType })).body.key as string;
+    const photosBefore = calls.length;
+
+    // a PNG sent as a JPEG
+    let key = await mint('image/jpeg');
+    storage.put(key, new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), 'image/jpeg');
+    let res = await call('POST', '/photos', { s3Key: key });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/is image\/png but was sent as image\/jpeg/);
+
+    // not an image at all
+    key = await mint('image/jpeg');
+    storage.put(key, new TextEncoder().encode('<html>not a photo</html>'), 'image/jpeg');
+    res = await call('POST', '/photos', { s3Key: key });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/not a JPEG, PNG or WebP/);
+
+    // too big: the store hands back only the capped prefix, as a ranged GET would
+    key = await mint('image/jpeg');
+    const big = new Uint8Array(MAX_PHOTO_BYTES + 4096);
+    big.set([0xff, 0xd8, 0xff]);
+    storage.put(key, big, 'image/jpeg');
+    res = await call('POST', '/photos', { s3Key: key });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/larger than 10 MB/);
+
+    // none of those reached the model
+    expect(calls.length).toBe(photosBefore);
+
+    // a WebP goes through with the type the bytes say
+    key = await mint('image/webp');
+    storage.put(key, new TextEncoder().encode('RIFF\0\0\0\0WEBPVP8 '), 'image/webp');
+    expect((await call('POST', '/photos', { s3Key: key })).status).toBe(201);
+    expect(calls.at(-1)?.contentType).toBe('image/webp');
+  });
+
+  it('keeps the photo when the model throws', async () => {
+    fail = true;
+    try {
+      const key = await upload();
+      const res = await call('POST', '/photos', { s3Key: key, roomId });
+      expect(res.status).toBe(201);
+      expect(res.body.suggestion).toBeNull();
+      expect((await call('GET', `/photos/${res.body.id}`)).body.roomId).toBe(roomId);
+    } finally {
+      fail = false;
+    }
   });
 
   it('rejects keys it did not mint, missing uploads and duplicates', async () => {

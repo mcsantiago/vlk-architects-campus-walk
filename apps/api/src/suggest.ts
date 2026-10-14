@@ -43,6 +43,14 @@ Confidence is high only when both the object and its condition are clearly visib
 const MAX_IMAGE_BYTES = 4_500_000;
 
 /**
+ * The walker is standing in a room waiting on this. The SDK's defaults (10 minutes, two
+ * retries) suit batch jobs, not a form; one retry inside a short budget, then the form opens
+ * empty and the photo is still saved.
+ */
+export const SUGGESTION_TIMEOUT_MS = 20_000;
+export const SUGGESTION_MAX_RETRIES = 1;
+
+/**
  * Validates and resolves raw model output. Anything malformed, or an answer that names no
  * type and no condition, degrades to null rather than a half-filled form.
  */
@@ -105,5 +113,6 @@ export function suggesterFromEnv(env = process.env): Suggester {
     console.warn('BEDROCK_MODEL not set: AI suggestions are disabled');
     return noSuggester;
   }
-  return new BedrockSuggester(new AnthropicBedrockMantle({ awsRegion: env.AWS_REGION }), env.BEDROCK_MODEL);
+  const client = new AnthropicBedrockMantle({ awsRegion: env.AWS_REGION, timeout: SUGGESTION_TIMEOUT_MS, maxRetries: SUGGESTION_MAX_RETRIES });
+  return new BedrockSuggester(client, env.BEDROCK_MODEL);
 }
