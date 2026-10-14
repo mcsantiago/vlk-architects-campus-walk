@@ -1,4 +1,4 @@
-import { conditionLabel, type AssetWithPhotos } from '@campus-walk/shared';
+import { ASSET_CATEGORIES, conditionLabel, type AssetWithPhotos } from '@campus-walk/shared';
 import { Link, useNavigate } from 'react-router';
 import { ConditionDot } from './ConditionPicker';
 
@@ -52,7 +52,7 @@ export function AssetRow({ asset, campusId, actions }: { asset: AssetWithPhotos;
   );
 }
 
-/** Assets grouped by category in the order a walker scans a room: furniture, then equipment, then systems. */
+/** Assets grouped by category in the order a walker scans a room: furniture, technology, equipment, then systems. */
 export function AssetList({
   assets,
   campusId,
@@ -65,10 +65,9 @@ export function AssetList({
   actions?: AssetRowActions;
 }) {
   if (assets.length === 0) return <p className="center">{empty}</p>;
-  const groups = ['furniture', 'equipment', 'system'] as const;
   return (
     <div className="stack">
-      {groups.map((g) => {
+      {ASSET_CATEGORIES.map((g) => {
         const rows = assets.filter((a) => a.assetType.category === g);
         if (rows.length === 0) return null;
         return (

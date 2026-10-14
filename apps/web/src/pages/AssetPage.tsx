@@ -1,11 +1,11 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { conditionLabel, type AssetEventView, type AssetView, type CampusTree } from '@campus-walk/shared';
+import type { AssetEventView, AssetView, CampusTree } from '@campus-walk/shared';
 import { useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { ApiError } from '../api/client';
 import { keys, useAsset, useDeleteAsset, useMoveAsset, useTree } from '../api/queries';
 import { locationBody } from '../components/AssetFields';
-import { ConditionDot } from '../components/ConditionPicker';
+import { ConditionDot, describeCondition } from '../components/ConditionPicker';
 import { useConfirm } from '../components/Confirm';
 import { CopySheet } from '../components/CopySheet';
 import { LocationPicker, describeLocation, type Location } from '../components/LocationPicker';
@@ -110,8 +110,27 @@ export function AssetPage() {
             <dd>{a.quantity}{a.assetType.trackedIndividually && <span className="muted small"> · tracked one per record</span>}</dd>
             <dt>Condition</dt>
             <dd className="row" style={{ gap: 6 }}>
-              <ConditionDot value={a.condition} /> {a.condition} · {conditionLabel(a.condition)}
+              <ConditionDot value={a.condition} /> {describeCondition(a.condition)}
+              {a.condition === null && <span className="muted small">· on the inventory, not yet walked</span>}
             </dd>
+            {(a.manufacturer || a.model) && (
+              <>
+                <dt>Make / model</dt>
+                <dd>{[a.manufacturer, a.model].filter(Boolean).join(' ')}</dd>
+              </>
+            )}
+            {a.serialNumber && (
+              <>
+                <dt>Serial</dt>
+                <dd>{a.serialNumber}</dd>
+              </>
+            )}
+            {a.installYear && (
+              <>
+                <dt>Installed</dt>
+                <dd>{a.installYear}</dd>
+              </>
+            )}
             <dt>Location</dt>
             <dd>{describeLocation(tree.data, here)}</dd>
             <dt>Notes</dt>
@@ -194,7 +213,7 @@ export function describeEvent(ev: AssetEventView, tree: CampusTree | undefined, 
   const after = snap(ev.after);
   switch (ev.kind) {
     case 'created':
-      return `Recorded${after?.quantity && after.quantity > 1 ? ` ${after.quantity} ×` : ''} ${after?.assetType?.name ?? typeName}, condition ${after?.condition ?? '?'}`;
+      return `Recorded${after?.quantity && after.quantity > 1 ? ` ${after.quantity} ×` : ''} ${after?.assetType?.name ?? typeName}, ${after?.condition == null ? 'not yet rated' : `condition ${after.condition}`}`;
     case 'deleted':
       return 'Deleted';
     case 'moved':
@@ -203,7 +222,7 @@ export function describeEvent(ev: AssetEventView, tree: CampusTree | undefined, 
       const changes: string[] = [];
       if (before?.assetType?.id !== after?.assetType?.id) changes.push(`type ${before?.assetType?.name} → ${after?.assetType?.name}`);
       if (before?.quantity !== after?.quantity) changes.push(`quantity ${before?.quantity} → ${after?.quantity}`);
-      if (before?.condition !== after?.condition) changes.push(`condition ${before?.condition} → ${after?.condition}`);
+      if (before?.condition !== after?.condition) changes.push(`condition ${before?.condition ?? 'not rated'} → ${after?.condition ?? 'not rated'}`);
       if (before?.label !== after?.label) changes.push(`label ${before?.label ?? '—'} → ${after?.label ?? '—'}`);
       if (before?.notes !== after?.notes) changes.push('notes');
       return changes.length ? `Changed ${changes.join(', ')}` : 'Saved without changes';

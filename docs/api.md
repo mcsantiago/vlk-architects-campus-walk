@@ -16,7 +16,7 @@ Reads never need it. Writes without it, or with an id that is not a known user, 
 
 **Validation.** Request bodies are validated with the zod schemas in `packages/shared/src/api.ts`. The web app imports the same schemas.
 
-**Timestamps** are ISO 8601 strings in UTC. **Condition** is an integer 1–5: 5 Excellent, 4 Good, 3 Fair, 2 Poor, 1 Critical. "Poor condition" means `condition <= 2`.
+**Timestamps** are ISO 8601 strings in UTC. **Condition** is an integer 1–5: 5 Excellent, 4 Good, 3 Fair, 2 Poor, 1 Critical, or `null` for a record that is on the district's inventory but has not been rated on a walk yet. "Poor condition" means `condition <= 2`; unrated records are neither poor nor good and are reported separately.
 
 **Errors** always have the same envelope:
 
@@ -43,7 +43,7 @@ Reads never need it. Writes without it, or with an id that is not a known user, 
 
 ### `AssetType`
 ```json
-{ "id": "uuid", "name": "Projector", "category": "furniture | equipment | system", "trackedIndividually": true }
+{ "id": "uuid", "name": "Projector", "category": "furniture | technology | equipment | system", "trackedIndividually": true }
 ```
 `trackedIndividually` means one record per unit (`quantity` must be 1). Furniture is counted via `quantity`.
 
@@ -56,7 +56,11 @@ Reads never need it. Writes without it, or with an id that is not a known user, 
   "roomId": "uuid | null",
   "label": "RTU-2 | null",
   "quantity": 1,
-  "condition": 2,
+  "condition": 2,                      // or null: not yet rated
+  "manufacturer": "Trane",             // the next four come from an imported inventory; null when unknown
+  "model": "TRA-830",
+  "serialNumber": "SN96630662",
+  "installYear": 2006,
   "notes": "string | null",
   "version": 3,
   "createdAt": "...",
@@ -188,7 +192,14 @@ Add a type to the catalogue from the field, or find it by name (case-insensitive
 ```json
 { "name": "Kiln", "category": "equipment", "trackedIndividually": true }
 ```
-`category` is one of `furniture`, `equipment`, `system`. `trackedIndividually: true` means one record per unit; `false` means the type is counted with a quantity.
+`category` is one of `furniture`, `technology`, `equipment`, `system`. `trackedIndividually: true` means one record per unit; `false` means the type is counted with a quantity.
+
+### `PATCH /asset-types/:id`
+Change a type's category or how it is counted. Category belongs to the type, so every asset of the type moves with it in every listing, roll-up and export. The name is not editable. **Auth:** required.
+```jsonc
+{ "category": "technology", "trackedIndividually": true }   // either or both
+```
+**200** → `AssetType`. **400** when nothing is sent, or when switching a counted type to per-unit while live records with `quantity > 1` exist (`"<name> has records with a quantity above 1; split them before tracking it per unit"`). **404** unknown type.
 **201** → `AssetType` (new or existing).
 **400** validation, **401**.
 
@@ -236,7 +247,8 @@ Asset & {
   "roomId" | "floorId" | "buildingId": "uuid",      // Location, see above
   "assetTypeId": "uuid",
   "quantity": 1,                                   // int 1–10000, default 1; must be 1 if type is trackedIndividually
-  "condition": 4,                                  // int 1–5, required
+  "condition": 4,                                  // int 1–5; omit or null for "not yet rated" (imports do; the field form always sends one)
+  "manufacturer": "Epson", "model": "PowerLite 992F", "serialNumber": "X9K2-0412", "installYear": 2021,   // all optional
   "label": "string ≤ 80 | null",                   // optional
   "notes": "string ≤ 2000 | null",                 // optional
   "photoIds": ["uuid"]                             // optional, ≤ 10; photos must exist and be unattached
@@ -253,7 +265,8 @@ Partial update with optimistic concurrency. **Auth:** required.
   "version": 3,                 // required: the version you last read
   "assetTypeId": "uuid",        // optional
   "quantity": 24,               // optional
-  "condition": 2,               // optional
+  "condition": 2,               // optional; null clears the rating
+  "manufacturer": "Epson", "model": "…", "serialNumber": "…", "installYear": 2021,   // optional
   "label": "string | null",     // optional; null clears
   "notes": "string | null"      // optional; null clears
 }
@@ -273,7 +286,7 @@ Moving to `buildingId` alone makes it a building-level asset; to `floorId` alone
 **409**, **400**, **401**, **404**.
 
 ### `POST /assets/:id/copy`
-Copy an asset to another room, floor or building level. The copy gets the source's type, quantity, condition, label and notes as a new record with `version` 1 and its own `created` event. Photos stay with the original: they are of that unit, not the copy. **Auth:** required.
+Copy an asset to another room, floor or building level. The copy gets the source's type, quantity, condition, label, notes, make, model and install year as a new record with `version` 1 and its own `created` event. Photos and the serial number stay with the original: they identify that unit, not the copy. **Auth:** required.
 ```json
 { "roomId" | "floorId" | "buildingId": "uuid" }     // Location, see above
 ```
@@ -354,10 +367,11 @@ The roll-up. `buildingId` is optional and scopes everything to one building. **A
     "floor": { "id": "uuid", "name": "..." } | null,
     "room": { "id": "uuid", "number": "...", "name": "..." } | null
   }],
-  "poorConditionMax": 2
+  "poorConditionMax": 2,
+  "notRated": { "records": 207, "units": 1180 }    // live assets with condition null
 }
 ```
-`records` = number of asset rows, `units` = `SUM(quantity)`. `countsByType` sorts by units desc. `notWalked` sorts by building code, floor level, room number. `poorCondition` is `condition <= poorConditionMax`, sorted worst first.
+`records` = number of asset rows, `units` = `SUM(quantity)`. `countsByType` sorts by units desc and includes unrated records. `notWalked` sorts by building code, floor level, room number. `poorCondition` is `condition <= poorConditionMax`, sorted worst first; unrated records are excluded from it and counted in `notRated`.
 **404** unknown campus.
 
 ---
@@ -368,7 +382,7 @@ The roll-up. `buildingId` is optional and scopes everything to one building. **A
 **Auth:** none. **200** `text/csv`, `Content-Disposition: attachment; filename="assets.csv"`, CRLF line ends. One row per live asset:
 
 ```
-building_code,building_name,floor_level,floor_name,room_number,room_name,asset_type,category,label,quantity,condition,condition_label,notes,updated_at,asset_id
+building_code,building_name,floor_level,floor_name,room_number,room_name,asset_type,category,label,quantity,condition,condition_label,notes,manufacturer,model,serial_number,install_year,updated_at,asset_id
 ```
 Floor and room columns are empty for building- and floor-level assets.
 
@@ -392,7 +406,7 @@ Required columns (header names are case-insensitive, extra columns ignored, BOM 
 | `floor_name` | used only when creating the floor; blank → `Floor <level>` |
 | `room_number` | 1–20 chars; matched per floor |
 | `room_name` | blank → the room number |
-| `room_type` | one of `classroom lab library office gym cafeteria kitchen restroom storage mechanical corridor other` |
+| `room_type` | free text, 1–40 characters, shown as given (e.g. `classroom`, `Science Lab`, `Band Hall`); it is never branched on, so new kinds of room need no code change |
 
 Semantics: buildings and floors are created when missing. A room that exists (same building code, floor level, room number) has its `name` and `room_type` updated, and keeps its walk status and assets. Nothing is ever deleted. The whole file is validated first and written in one transaction: any error means nothing is written. Max 5,000 rows.
 

@@ -44,7 +44,7 @@ export function CopySheet({ tree, asset, onClose, onCopied }: CopySheetProps) {
           <p className="muted small" style={{ margin: 0 }}>
             {asset.quantity > 1 && `${asset.quantity} × `}
             {asset.assetType.name}
-            {asset.label && ` · ${asset.label}`}. Type, quantity, condition, label and notes are copied; photos stay with the original.
+            {asset.label && ` · ${asset.label}`}. Type, quantity, condition, label and notes are copied; photos and the serial number stay with the original.
           </p>
         )}
         {tree && to ? <LocationPicker tree={tree} value={to} onChange={setTo} /> : <p className="muted">Loading rooms…</p>}

@@ -28,6 +28,10 @@ export async function exportAssetsCsv(db: Db, campusId: string): Promise<string>
       label: s.asset.label,
       quantity: s.asset.quantity,
       condition: s.asset.condition,
+      manufacturer: s.asset.manufacturer,
+      model: s.asset.model,
+      serialNumber: s.asset.serialNumber,
+      installYear: s.asset.installYear,
       notes: s.asset.notes,
       updatedAt: s.asset.updatedAt,
     })
@@ -40,10 +44,10 @@ export async function exportAssetsCsv(db: Db, campusId: string): Promise<string>
     .orderBy(s.building.code, s.floor.level, s.room.number, s.assetType.category, s.assetType.name, s.asset.label);
 
   return toCsv(
-    ['building_code', 'building_name', 'floor_level', 'floor_name', 'room_number', 'room_name', 'asset_type', 'category', 'label', 'quantity', 'condition', 'condition_label', 'notes', 'updated_at', 'asset_id'],
+    ['building_code', 'building_name', 'floor_level', 'floor_name', 'room_number', 'room_name', 'asset_type', 'category', 'label', 'quantity', 'condition', 'condition_label', 'notes', 'manufacturer', 'model', 'serial_number', 'install_year', 'updated_at', 'asset_id'],
     rows.map((r) => [
       r.buildingCode, r.buildingName, r.floorLevel, r.floorName, r.roomNumber, r.roomName,
-      r.type, r.category, r.label, r.quantity, r.condition, conditionLabel(r.condition), r.notes, r.updatedAt, r.id,
+      r.type, r.category, r.label, r.quantity, r.condition, conditionLabel(r.condition), r.notes, r.manufacturer, r.model, r.serialNumber, r.installYear, r.updatedAt, r.id,
     ]),
   );
 }

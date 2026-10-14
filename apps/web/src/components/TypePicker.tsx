@@ -2,7 +2,7 @@ import { ASSET_CATEGORIES, type AssetCategory, type AssetTypeView } from '@campu
 import { useQueryClient } from '@tanstack/react-query';
 import { useRef, useState } from 'react';
 import { describeError } from '../api/client';
-import { keys, useCreateAssetType } from '../api/queries';
+import { keys, useCreateAssetType, useUpdateAssetType } from '../api/queries';
 
 const categoryLabel = (c: AssetCategory) => c[0]!.toUpperCase() + c.slice(1);
 /** Furniture is counted; anything else gets one record per unit unless the walker says otherwise. */
@@ -11,6 +11,34 @@ const defaultTracking = (c: AssetCategory) => c !== 'furniture';
 interface Draft {
   category: AssetCategory;
   trackedIndividually: boolean;
+}
+
+/** Category chips and the counted / one-per-unit switch, shared by "new type" and "change type". */
+function TypeSettings({ value, onChange }: { value: Draft; onChange: (d: Draft) => void }) {
+  return (
+    <>
+      <div className="chips">
+        {ASSET_CATEGORIES.map((cat) => (
+          <button
+            key={cat}
+            type="button"
+            className={`chip${value.category === cat ? ' selected' : ''}`}
+            aria-pressed={value.category === cat}
+            onClick={() => onChange({ category: cat, trackedIndividually: defaultTracking(cat) })}
+          >
+            {categoryLabel(cat)}
+          </button>
+        ))}
+      </div>
+      <label className="check small">
+        <input type="checkbox" checked={value.trackedIndividually} onChange={(e) => onChange({ ...value, trackedIndividually: e.target.checked })} />
+        <span>
+          One record per unit, each with its own condition and photos.
+          <span className="muted"> Untick for things that are counted, like chairs.</span>
+        </span>
+      </label>
+    </>
+  );
 }
 
 interface TypePickerProps {
@@ -24,7 +52,8 @@ interface TypePickerProps {
  * filter. Filtering is in memory on the phone; the list comes from one GET, cached, and is
  * refreshed in the background each time the dropdown opens. When nothing matches, the walker
  * adds the type from here, with category and counting chosen inline, and it is selected as
- * soon as it is saved.
+ * soon as it is saved. The selected type's category can be changed from here too: category
+ * belongs to the type, so that moves every asset of the type at once.
  */
 export function TypePicker({ types, value, onChange }: TypePickerProps) {
   const qc = useQueryClient();
@@ -32,7 +61,10 @@ export function TypePicker({ types, value, onChange }: TypePickerProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [draft, setDraft] = useState<Draft | null>(null);
+  /** Settings being changed on the selected type, or null when not editing. */
+  const [editing, setEditing] = useState<Draft | null>(null);
   const create = useCreateAssetType();
+  const update = useUpdateAssetType();
 
   const selected = types.find((t) => t.id === value) ?? null;
 
@@ -45,6 +77,7 @@ export function TypePicker({ types, value, onChange }: TypePickerProps) {
   function show() {
     setOpen(true);
     setDraft(null);
+    setEditing(null);
     void qc.invalidateQueries({ queryKey: keys.assetTypes });
   }
 
@@ -71,6 +104,12 @@ export function TypePicker({ types, value, onChange }: TypePickerProps) {
     if (!draft || !name) return;
     const type = await create.mutateAsync({ name, ...draft });
     pick(type.id);
+  }
+
+  async function saveSettings() {
+    if (!selected || !editing) return;
+    await update.mutateAsync({ id: selected.id, ...editing });
+    setEditing(null);
   }
 
   const showing = open || draft !== null;
@@ -147,29 +186,7 @@ export function TypePicker({ types, value, onChange }: TypePickerProps) {
       {draft && (
         <div className="card stack" style={{ gap: 10 }}>
           <strong>New type: {name}</strong>
-          <div className="chips">
-            {ASSET_CATEGORIES.map((cat) => (
-              <button
-                key={cat}
-                type="button"
-                className={`chip${draft.category === cat ? ' selected' : ''}`}
-                onClick={() => setDraft({ category: cat, trackedIndividually: defaultTracking(cat) })}
-              >
-                {categoryLabel(cat)}
-              </button>
-            ))}
-          </div>
-          <label className="check small">
-            <input
-              type="checkbox"
-              checked={draft.trackedIndividually}
-              onChange={(e) => setDraft({ ...draft, trackedIndividually: e.target.checked })}
-            />
-            <span>
-              One record per unit, each with its own condition and photos.
-              <span className="muted"> Untick for things that are counted, like chairs.</span>
-            </span>
-          </label>
+          <TypeSettings value={draft} onChange={setDraft} />
           {create.isError && <div className="notice error small">{describeError(create.error)}</div>}
           <div className="btn-row">
             <button type="button" className="btn primary" disabled={create.isPending} onClick={add}>
@@ -183,6 +200,44 @@ export function TypePicker({ types, value, onChange }: TypePickerProps) {
                 setQuery('');
               }}
             >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+      {selected && !showing && !editing && (
+        <div className="row small muted" style={{ gap: 8 }}>
+          <span className="grow">
+            {categoryLabel(selected.category)} · {selected.trackedIndividually ? 'one record per unit' : 'counted'}
+          </span>
+          <button
+            type="button"
+            className="btn sm"
+            onClick={() => {
+              update.reset();
+              setEditing({ category: selected.category, trackedIndividually: selected.trackedIndividually });
+            }}
+          >
+            Change…
+          </button>
+        </div>
+      )}
+      {selected && editing && (
+        <div className="card stack" style={{ gap: 10 }}>
+          <strong>{selected.name}</strong>
+          <span className="small muted">This changes the type itself: every {selected.name} on every campus follows.</span>
+          <TypeSettings value={editing} onChange={setEditing} />
+          {update.isError && <div className="notice error small">{describeError(update.error)}</div>}
+          <div className="btn-row">
+            <button
+              type="button"
+              className="btn primary"
+              disabled={update.isPending || (editing.category === selected.category && editing.trackedIndividually === selected.trackedIndividually)}
+              onClick={saveSettings}
+            >
+              {update.isPending ? <span className="spinner" /> : 'Save type'}
+            </button>
+            <button type="button" className="btn" onClick={() => setEditing(null)}>
               Cancel
             </button>
           </div>

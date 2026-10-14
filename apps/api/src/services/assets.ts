@@ -16,6 +16,10 @@ export const assetView = {
   quantity: s.asset.quantity,
   condition: s.asset.condition,
   notes: s.asset.notes,
+  manufacturer: s.asset.manufacturer,
+  model: s.asset.model,
+  serialNumber: s.asset.serialNumber,
+  installYear: s.asset.installYear,
   version: s.asset.version,
   createdAt: s.asset.createdAt,
   updatedAt: s.asset.updatedAt,
@@ -103,6 +107,10 @@ export async function createAsset(db: Db, input: CreateAssetInput, actorId: stri
         quantity: input.quantity,
         condition: input.condition,
         notes: input.notes ?? null,
+        manufacturer: input.manufacturer ?? null,
+        model: input.model ?? null,
+        serialNumber: input.serialNumber ?? null,
+        installYear: input.installYear ?? null,
       })
       .returning({ id: s.asset.id });
     await attachPhotos(tx, row!.id, input.photoIds);
@@ -114,7 +122,8 @@ export async function createAsset(db: Db, input: CreateAssetInput, actorId: stri
 
 /**
  * Copies an asset's descriptive fields to another location as a new record with its own
- * version and history. Photos stay with the original: they are of that unit, not this one.
+ * version and history. Photos and the serial number stay with the original: they identify
+ * that unit, not this one.
  */
 export async function copyAsset(db: Db, id: string, input: CopyAssetInput, actorId: string): Promise<AssetView> {
   const source = await getAsset(db, id);
@@ -128,6 +137,9 @@ export async function copyAsset(db: Db, id: string, input: CopyAssetInput, actor
       quantity: source.quantity,
       condition: source.condition,
       notes: source.notes,
+      manufacturer: source.manufacturer,
+      model: source.model,
+      installYear: source.installYear,
       photoIds: [],
     },
     actorId,
@@ -146,6 +158,10 @@ export async function updateAsset(db: Db, id: string, input: UpdateAssetInput, a
       ...(input.condition !== undefined && { condition: input.condition }),
       ...(input.label !== undefined && { label: input.label }),
       ...(input.notes !== undefined && { notes: input.notes }),
+      ...(input.manufacturer !== undefined && { manufacturer: input.manufacturer }),
+      ...(input.model !== undefined && { model: input.model }),
+      ...(input.serialNumber !== undefined && { serialNumber: input.serialNumber }),
+      ...(input.installYear !== undefined && { installYear: input.installYear }),
     });
     const after = (await getAsset(tx, id))!;
     await tx.insert(s.assetEvent).values({ assetId: id, kind: 'updated', before, after, changedBy: actorId });

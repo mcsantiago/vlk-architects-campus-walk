@@ -61,7 +61,7 @@ describe('export / import', () => {
     expect(res.status).toBe(200);
     expect(res.headers.get('content-type')).toMatch(/text\/csv/);
     const lines = (await res.text()).trim().split('\r\n');
-    expect(lines[0]).toBe('building_code,building_name,floor_level,floor_name,room_number,room_name,asset_type,category,label,quantity,condition,condition_label,notes,updated_at,asset_id');
+    expect(lines[0]).toBe('building_code,building_name,floor_level,floor_name,room_number,room_name,asset_type,category,label,quantity,condition,condition_label,notes,manufacturer,model,serial_number,install_year,updated_at,asset_id');
     const rtu = lines.find((l) => l.includes('RTU-2'))!;
     expect(rtu).toMatch(/^A,Main Classroom Building,,,,,Rooftop HVAC Unit,system,RTU-2,1,2,Poor,/);
     expect(lines.filter((l) => l.includes(',Student Desk,'))).toHaveLength(8);
@@ -115,7 +115,7 @@ describe('export / import', () => {
       'building_code,building_name,floor_level,floor_name,room_number,room_name,room_type',
       'E,New,1,,E101,Ok,classroom',
       'E,New,one,,E102,Bad level,classroom',
-      'E,New,1,,E103,Bad type,ballroom',
+      'E,New,1,,E103,No type,',
       'E,New,1,,E101,Dup,classroom',
     ].join('\r\n');
     const res = await app.request(`/campuses/${campusId}/rooms/import`, {

@@ -128,6 +128,12 @@ export async function getCampusSummary(db: Db, campusId: string, buildingId?: st
     .groupBy(s.assetType.id, s.assetType.name, s.assetType.category);
   countsByType.sort((a, b) => b.units - a.units || a.name.localeCompare(b.name));
 
+  const [notRated] = await db
+    .select({ records: count(), units: sql<number>`coalesce(sum(${s.asset.quantity}), 0)`.mapWith(Number) })
+    .from(s.asset)
+    .innerJoin(s.building, eq(s.asset.buildingId, s.building.id))
+    .where(and(liveAssets, scope, isNull(s.asset.condition)));
+
   const poorCondition = await db
     .select({
       ...assetView,
@@ -184,5 +190,6 @@ export async function getCampusSummary(db: Db, campusId: string, buildingId?: st
     countsByType,
     poorCondition,
     poorConditionMax: POOR_CONDITION_MAX,
+    notRated: notRated!,
   };
 }

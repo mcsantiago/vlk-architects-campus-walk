@@ -71,7 +71,7 @@ export function SummaryPage() {
           )}
         </div>
 
-        <div className="stats">
+        <div className={`stats${s.notRated.records > 0 ? ' four' : ''}`}>
           <div className="stat">
             <div className="v">{s.rooms.notWalked.length}</div>
             <div className="k">rooms left to walk</div>
@@ -92,6 +92,15 @@ export function SummaryPage() {
               {records !== units && <>, {records.toLocaleString()} records</>}
             </div>
           </div>
+          {s.notRated.records > 0 && (
+            <div className="stat">
+              <div className="v">{s.notRated.records}</div>
+              <div className="k">
+                assets not yet rated
+                {s.notRated.units !== s.notRated.records && <>, {s.notRated.units.toLocaleString()} units</>}
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="section card unwalked">

@@ -11,6 +11,7 @@ import type {
   CampusView,
   CreateAssetInput,
   CreateAssetTypeInput,
+  UpdateAssetTypeInput,
   MoveAssetInput,
   RoomDetail,
   RoomHeader,
@@ -73,6 +74,21 @@ export function useCreateAssetType() {
     onSuccess: (type) => {
       qc.setQueryData<AssetTypeView[]>(keys.assetTypes, (old) => old && (old.some((t) => t.id === type.id) ? old : [...old, type]));
       void qc.invalidateQueries({ queryKey: keys.assetTypes });
+    },
+  });
+}
+
+/** Recategorises or recounts a type; every listing shows the type's category, so they all refresh. */
+export function useUpdateAssetType() {
+  const qc = useQueryClient();
+  const invalidate = useInvalidateAssets();
+  return useMutation({
+    mutationFn: ({ id, ...input }: UpdateAssetTypeInput & { id: string }) => api<AssetTypeView>(`/asset-types/${id}`, { method: 'PATCH', body: input }),
+    onSuccess: (type) => {
+      qc.setQueryData<AssetTypeView[]>(keys.assetTypes, (old) => old?.map((t) => (t.id === type.id ? type : t)));
+      void qc.invalidateQueries({ queryKey: keys.assetTypes });
+      void qc.invalidateQueries({ queryKey: ['asset'] });
+      void invalidate();
     },
   });
 }

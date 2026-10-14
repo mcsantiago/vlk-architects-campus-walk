@@ -69,11 +69,14 @@ describe('asset location constraints', () => {
     );
   });
 
-  it('rejects out-of-range condition and non-positive quantity', async () => {
+  it('rejects out-of-range condition and non-positive quantity, but allows "not rated"', async () => {
     const base = { buildingId: main().building.id, assetTypeId: f.desk.id };
     await expectConstraint(h.db.insert(s.asset).values({ ...base, condition: 6 }), 'asset_condition_ck');
     await expectConstraint(h.db.insert(s.asset).values({ ...base, condition: 0 }), 'asset_condition_ck');
     await expectConstraint(h.db.insert(s.asset).values({ ...base, condition: 3, quantity: 0 }), 'asset_quantity_ck');
+    await expectConstraint(h.db.insert(s.asset).values({ ...base, condition: 3, installYear: 1750 }), 'asset_install_year_ck');
+    const [unrated] = await h.db.insert(s.asset).values({ ...base, condition: null }).returning();
+    expect(unrated!.condition).toBeNull();
   });
 });
 

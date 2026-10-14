@@ -46,8 +46,13 @@ export interface AssetView {
   roomId: string | null;
   label: string | null;
   quantity: number;
-  condition: number;
+  /** Null until a walker rates it. */
+  condition: number | null;
   notes: string | null;
+  manufacturer: string | null;
+  model: string | null;
+  serialNumber: string | null;
+  installYear: number | null;
   version: number;
   createdAt: string;
   updatedAt: string;
@@ -162,6 +167,8 @@ export interface CampusSummary {
     }
   >;
   poorConditionMax: number;
+  /** Asset records with no condition yet, and the units they stand for. */
+  notRated: { records: number; units: number };
 }
 
 export interface RoomImportResult {

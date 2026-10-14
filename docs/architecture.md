@@ -199,7 +199,7 @@ erDiagram
   ASSET_TYPE {
     uuid id PK
     text name "unique"
-    text category "furniture | equipment | system"
+    text category "furniture | technology | equipment | system"
     bool tracked_individually
   }
   ASSET {
@@ -210,8 +210,12 @@ erDiagram
     uuid asset_type_id FK
     text label
     int quantity "1 if tracked individually"
-    int condition "1..5"
+    int condition "1..5, null until rated"
     text notes
+    text manufacturer "from an imported inventory"
+    text model
+    text serial_number
+    int install_year
     int version "optimistic concurrency"
     timestamptz deleted_at "soft delete"
   }
