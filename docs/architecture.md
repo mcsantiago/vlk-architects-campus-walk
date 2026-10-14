@@ -132,7 +132,7 @@ sequenceDiagram
   API->>API: too big? magic bytes say JPEG/PNG/WebP and agree with the declared type?
   API->>D: SELECT asset_type (names for the prompt)
   API->>D: INSERT photo {s3Key, assetId: null, ai_suggestion: null}
-  API->>B: messages.parse(image + type list, zod output format, effort low, 20 s per attempt, 1 retry)
+  API->>B: messages.parse(image + type list, zod output format, effort low, 12 s per attempt, 1 retry)
   alt parsed and useful
     B-->>API: {asset_type, condition, confidence, note}
     API->>API: normalizeSuggestion → resolve type name → id

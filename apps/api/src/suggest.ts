@@ -44,10 +44,11 @@ const MAX_IMAGE_BYTES = 4_500_000;
 
 /**
  * The walker is standing in a room waiting on this. The SDK's defaults (10 minutes, two
- * retries) suit batch jobs, not a form; one retry inside a short budget, then the form opens
+ * retries) suit batch jobs, not a form. A low-effort vision call normally answers in a few
+ * seconds; one retry inside a short budget (about 25 s worst case), then the form opens
  * empty and the photo is still saved.
  */
-export const SUGGESTION_TIMEOUT_MS = 20_000;
+export const SUGGESTION_TIMEOUT_MS = 12_000;
 export const SUGGESTION_MAX_RETRIES = 1;
 
 /**

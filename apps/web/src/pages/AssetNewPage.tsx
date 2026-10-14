@@ -1,7 +1,7 @@
 import type { AiSuggestion, PhotoView } from '@campus-walk/shared';
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router';
-import { api } from '../api/client';
+import { api, describeError } from '../api/client';
 import { useAssetTypes, useCreateAsset, useTree } from '../api/queries';
 import { AssetFields, emptyFields, locationBody, type AssetFieldValues } from '../components/AssetFields';
 import { LocationPicker, describeLocation, type Location } from '../components/LocationPicker';
@@ -53,10 +53,16 @@ export function AssetNewPage() {
       ? `/c/${campusId}/buildings/${loc.buildingId}/systems`
       : `/c/${campusId}`;
 
-  /** A draft photo has a record and an object already; removing it here removes both. */
+  /**
+   * A draft photo has a record and an object already; removing it here removes both. It leaves
+   * the form either way (it must not be attached on save); a failed delete is reported, not hidden.
+   */
   function removeDraftPhoto(photo: PhotoView) {
     setPhotos((ps) => ps.filter((x) => x.id !== photo.id));
-    void api<void>(`/photos/${photo.id}`, { method: 'DELETE' }).catch(() => {});
+    api<void>(`/photos/${photo.id}`, { method: 'DELETE' }).catch((err: unknown) => {
+      console.warn('could not delete draft photo', err);
+      setProblem(`The photo was taken off this asset but could not be deleted: ${describeError(err)}`);
+    });
   }
 
   function onPhotoAdded(photo: PhotoView) {
