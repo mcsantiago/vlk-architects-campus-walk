@@ -1,0 +1,8 @@
+building_id,campus_id,name,building_type,year_built,gross_sf,floor_count
+B-101,C-100,Main Building,Academic,1987,58000,2
+B-102,C-100,Gymnasium,Athletics,1995,9500,1
+B-103,C-100,Portable P-1,Portable,2016,1800,1
+B-201,C-200,Academic Wing A,Academic,2004,96000,3
+B-202,C-200,Commons & Admin,Academic,2004,41000,1
+B-203,C-200,Fine Arts Center,Fine Arts,2012,38000,1
+B-204,C-200,Field House,Athletics,2004,30000,1

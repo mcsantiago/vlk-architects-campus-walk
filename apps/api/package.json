@@ -9,7 +9,8 @@
     "typecheck": "tsc -p .",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx --env-file=../../.env src/db/migrate.ts",
-    "db:seed": "tsx --env-file=../../.env src/db/seed.ts"
+    "db:seed": "tsx --env-file=../../.env src/db/seed.ts",
+    "db:import-sample": "tsx --env-file=../../.env src/db/import-sample.ts"
   },
   "dependencies": {
     "@anthropic-ai/bedrock-sdk": "^0.34.4",
