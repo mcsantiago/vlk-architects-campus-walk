@@ -1,6 +1,6 @@
 # Campus Walk — Systems Diagram
 
-Status as of 2026-10-12. **Solid** = built and tested. **Dashed** = planned (AWS deploy).
+Status as of 2026-10-13. Everything shown is built and tested; the AWS stack in `infra/` is synthesised and its API image verified locally, but it has not been deployed (descoped for the submission).
 Mermaid blocks render in Obsidian's reading view.
 
 ## 1. System context
@@ -263,19 +263,16 @@ flowchart LR
     tapp --> tpg & tmem & tfake
   end
 
-  subgraph aws["AWS via CDK (planned)"]
-    cf["CloudFront + S3\n(web)"]
-    alb["ALB → ECS Fargate\n(api, task role)"]
-    rds[("RDS Postgres t4g.micro\nDATABASE_SSL=require")]
-    ps3[("S3 photos")]
-    br["Bedrock\nBEDROCK_MODEL=anthropic.claude-opus-5-5"]
-    sm["Secrets Manager\n(DB creds)"]
-    cf -.-> alb
-    alb -.-> rds & ps3 & br & sm
+  subgraph aws["AWS via CDK (infra/)"]
+    cf["CloudFront + S3 (web)\nFunction: access code, /api prefix, SPA shell"]
+    alb["ALB (CloudFront header only)\n→ ECS Fargate api, task role"]
+    rds[("RDS Postgres 16 t4g.micro\nisolated subnets, DATABASE_SSL=require")]
+    ps3[("S3 photos\npresigned PUT/GET")]
+    br["Bedrock\nBEDROCK_MODEL"]
+    sm["Secrets Manager\nDB_USER / DB_PASSWORD"]
+    cf --> alb
+    alb --> rds & ps3 & br & sm
   end
-
-  classDef planned stroke-dasharray: 5 5
-  class aws,cf,alb,rds,ps3,br,sm planned
 ```
 
 ## 7. Web app (apps/web)

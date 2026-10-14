@@ -1,11 +1,16 @@
 import { serve } from '@hono/node-server';
 import { createApp } from './app.ts';
 import { createDb } from './db/client.ts';
+import { seedIfEmpty } from './db/seed.ts';
 import { storageFromEnv } from './storage.ts';
 import { suggesterFromEnv } from './suggest.ts';
 
 const handle = createDb();
 if (process.env.AUTO_MIGRATE !== 'false') await handle.migrate();
+if (process.env.SEED_ON_EMPTY === '1') {
+  const campusId = await seedIfEmpty(handle.db);
+  if (campusId) console.log(`empty database: seeded the demo campus (${campusId})`);
+}
 
 const app = createApp({ db: handle.db, storage: storageFromEnv(), suggester: suggesterFromEnv(), log: true });
 const port = Number(process.env.PORT ?? 3000);

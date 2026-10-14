@@ -35,6 +35,19 @@ The AI suggestion is off unless `BEDROCK_MODEL` is set (see `.env.example`). It 
 
 **From a phone on the same Wi-Fi:** open the LAN URL Vite prints (`http://<laptop-ip>:5173`). Nothing else to set: the web app calls the API at `/api` on its own origin, Vite proxies that to the API, and the API presigns photo URLs for whatever host the request came from, so the phone's uploads go to `http://<laptop-ip>:9000` rather than `localhost`. The camera needs a secure context on iOS; `localhost` and plain `http://` on a LAN address both work in Safari for the file picker, but if the camera option is missing, tunnel it (`npx localtunnel --port 5173`) and set `S3_PUBLIC_ENDPOINT` to a tunnel for port 9000.
 
+## Deploying (written, not exercised)
+
+Cloud deployment was descoped for this submission in favour of the workflow, the code and the data model; the stack is included to show the intended production shape. One CDK stack in `infra/`: CloudFront + S3 for the web app, ECS Fargate behind an ALB for the API, RDS Postgres (t4g.micro), S3 for photos, Bedrock through the task role, Secrets Manager for the database credentials. About $40 a month at demo size, most of it the ALB and RDS; there is no NAT gateway because the single task runs in a public subnet with a public IP.
+
+What has been verified: the stack synthesises cleanly (64 resources), the API image builds from `apps/api/Dockerfile`, and that image was run against Postgres with the split credentials the task receives, where it migrated, seeded the empty database and served requests. What has not: an actual `cdk deploy`. The CloudFront Function, the ALB header rule and the Bedrock policy have not met a real account yet, so expect a short iteration there.
+
+```bash
+npx -w infra cdk bootstrap aws://<account>/<region>   # once per account and region; needs AWS credentials and Docker
+CAMPUS_WALK_ACCESS_CODE=<code> npm run deploy          # builds the web app, builds and pushes the API image, deploys
+```
+
+The stack prints the CloudFront URL. The first visit on each device asks for the access code, checked by a CloudFront Function that sets a 30-day cookie; the same function forwards `/api/*` to the ALB without the prefix and refuses API calls without the cookie. The ALB only accepts requests carrying a header CloudFront adds, so there is no way around the gate. On start the API applies migrations and, if the database is empty, seeds the demo campus. Photo suggestions need model access enabled in Bedrock for the model in `infra/cdk.json` (`-c bedrockModel=` overrides it). `npm run destroy -w infra` removes everything, buckets and database included.
+
 ## Walk through it
 
 **Field (phone):**
@@ -57,6 +70,7 @@ The AI suggestion is off unless `BEDROCK_MODEL` is set (see `.env.example`). It 
 apps/api         Hono on Node 22 · Drizzle ORM · Postgres (PGlite in tests) · S3 presigned uploads · Bedrock
 apps/web         React 19 · Vite · TanStack Query · React Router · plain CSS, phone-first
 packages/shared  zod request schemas, response types and domain constants used by both
+infra/           AWS CDK stack (CloudFront + S3, ALB + Fargate, RDS, S3 photos, Bedrock) and the edge gate function
 docker/          RustFS bucket CORS
 docs/            architecture diagrams, API contract
 ```
@@ -126,7 +140,7 @@ Two different things:
 
 In rough order:
 
-1. **Deploy** with AWS CDK: CloudFront + S3 for the web, ECS Fargate behind an ALB for the API with a task role for S3 and Bedrock, RDS Postgres, Secrets Manager for the DB credentials, a shared access code at the edge.
+1. **Deploy it.** Run the stack in `infra/` against a real account and fix what the first deploy turns up. Then harden: a custom domain with an ACM certificate, WAF in front of CloudFront, RDS multi-AZ with deletion protection and longer backups, VPC endpoints instead of public task IPs, and a pipeline that runs the tests before `cdk deploy`.
 2. **Authentication, reconsidered.** The pick-a-name identity is a placeholder. The real version is a hosted login (Cognito or Entra ID, since districts and firms live in Microsoft 365) issuing a JWT the API verifies, with `app_user` keyed to the identity provider's subject so the existing `changed_by` and `walked_by` columns keep working unchanged. Roles would start small: walker (write assets and walk status), office (read summary, import rooms, export), admin (manage campuses and users). The `x-user-id` header is isolated in one middleware and one client function, so swapping it for a bearer token touches two files plus tests.
 3. **Offline-lite**: service worker caching the app shell and campus tree, writes queued in IndexedDB and replayed on reconnect (version checks still apply).
 4. OpenAPI document from the zod schemas (`@hono/zod-openapi`).

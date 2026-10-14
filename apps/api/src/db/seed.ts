@@ -116,6 +116,13 @@ export async function seedCampus(db: Db, spec: CampusSpec, now = new Date()) {
   return campusId;
 }
 
+/** A fresh deployment seeds the demo campus on first start (SEED_ON_EMPTY=1); a database with data is left alone. */
+export async function seedIfEmpty(db: Db): Promise<string | null> {
+  const existing = await db.select({ id: s.campus.id }).from(s.campus);
+  if (existing.length) return null;
+  return seedCampus(db, CAMPUS);
+}
+
 /** `npm run db:seed` — refuses to double-seed unless RESET=1, which wipes everything first. */
 async function main() {
   const handle = createDb();

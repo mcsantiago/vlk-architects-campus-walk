@@ -21,12 +21,22 @@ export interface DbHandle {
 const migrationsFolder = fileURLToPath(new URL('../../drizzle', import.meta.url));
 
 /**
+ * On AWS the connection comes in parts: host, port and name as plain environment, user and
+ * password injected from Secrets Manager. Locally DATABASE_URL is simpler and wins.
+ */
+function urlFromParts(env = process.env): string | undefined {
+  if (!env.DB_HOST) return undefined;
+  const auth = env.DB_USER ? `${encodeURIComponent(env.DB_USER)}:${encodeURIComponent(env.DB_PASSWORD ?? '')}@` : '';
+  return `postgres://${auth}${env.DB_HOST}:${env.DB_PORT ?? '5432'}/${env.DB_NAME ?? 'campus_walk'}`;
+}
+
+/**
  * DATABASE_URL selects the driver:
  *   postgres://...        -> node-postgres (RDS, or any real Postgres)
  *   pglite://<dir>        -> embedded Postgres persisted to <dir> (local dev default)
  *   pglite://memory       -> embedded, in-memory (tests)
  */
-export function createDb(url = process.env.DATABASE_URL ?? 'pglite://.data/pg'): DbHandle {
+export function createDb(url = process.env.DATABASE_URL ?? urlFromParts() ?? 'pglite://.data/pg'): DbHandle {
   if (url.startsWith('pglite://')) {
     const target = url.slice('pglite://'.length);
     let client: PGlite;

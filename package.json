@@ -4,7 +4,8 @@
   "type": "module",
   "workspaces": [
     "packages/*",
-    "apps/*"
+    "apps/*",
+    "infra"
   ],
   "scripts": {
     "dev": "npm run dev -w @campus-walk/api",
@@ -14,7 +15,9 @@
     "typecheck": "npm run typecheck --workspaces --if-present",
     "db:generate": "npm run db:generate -w @campus-walk/api",
     "db:migrate": "npm run db:migrate -w @campus-walk/api",
-    "db:seed": "npm run db:seed -w @campus-walk/api"
+    "db:seed": "npm run db:seed -w @campus-walk/api",
+    "deploy": "npm run build:web && npm run deploy -w infra",
+    "synth": "npm run synth -w infra"
   },
   "engines": {
     "node": ">=22"
