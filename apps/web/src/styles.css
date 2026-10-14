@@ -208,3 +208,29 @@ dialog.sheet > div { padding: 16px 16px calc(16px + env(safe-area-inset-bottom))
 .option:active { background: var(--green-soft); }
 .check { display: flex; align-items: flex-start; gap: 10px; cursor: pointer; }
 .check input { width: 22px; height: 22px; margin: 0; flex: none; accent-color: var(--green); }
+
+/* Office summary: the phone column widens into a dashboard grid on a desk. */
+.shell.wide main, .shell.wide .topbar-row { max-width: 1200px; }
+.dash { display: grid; gap: 12px; grid-template-columns: minmax(0, 1fr); align-items: start; }
+.dash > .section { margin-top: 0; }
+.dash .filter { max-width: 420px; }
+@media (min-width: 960px) {
+  .dash {
+    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+    gap: 16px;
+    grid-template-areas:
+      "filter   filter"
+      "progress stats"
+      "unwalked poor"
+      "counts   counts"
+      "csv      csv";
+  }
+  .dash .filter { grid-area: filter; }
+  .dash .progress-card { grid-area: progress; }
+  .dash .stats { grid-area: stats; }
+  .dash .unwalked { grid-area: unwalked; }
+  .dash .poor { grid-area: poor; }
+  .dash .counts { grid-area: counts; }
+  .dash .csv { grid-area: csv; }
+  .dash .counts .table { font-size: 1rem; }
+}

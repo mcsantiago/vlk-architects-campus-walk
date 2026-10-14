@@ -9,14 +9,16 @@ interface PageProps {
   subtitle?: string;
   /** Where the back arrow goes. Omit on the home screen. */
   back?: string;
+  /** Desktop-width content (the office summary); field screens keep the phone column. */
+  wide?: boolean;
   children: ReactNode;
 }
 
-export function Page({ title, subtitle, back, children }: PageProps) {
+export function Page({ title, subtitle, back, wide = false, children }: PageProps) {
   const user = useCurrentUser();
   const confirm = useConfirm();
   return (
-    <div className="shell">
+    <div className={wide ? 'shell wide' : 'shell'}>
       <header className="topbar">
         <div className="topbar-row">
           {back ? (

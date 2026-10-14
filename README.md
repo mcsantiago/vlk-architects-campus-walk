@@ -62,7 +62,7 @@ The stack prints the CloudFront URL. The first visit on each device asks for the
 8. **Photo.** One photo full-width with what it is of and the model's note if there was one.
 9. **Mark room walked** sends you back to the building with the next room highlighted.
 
-**Office (laptop):** the campus summary at `/c/<campus>/summary`: rooms walked, then rooms not yet walked grouped by building and floor (the office's first question, so it is first), counts by type (sum of quantity), assets in poor condition linking to the record, a building filter, CSV export of assets and rooms, and CSV import of rooms (the rooms export is the template).
+**Office (laptop):** the campus summary at `/c/<campus>/summary`, a two-column dashboard on a desk and a single column on a phone: rooms walked and headline numbers, then rooms not yet walked grouped by building and floor (the office's first question, so it is first), assets in poor condition linking to the record, counts by type (sum of quantity; the top eight, with a toggle for the rest), a building filter, CSV export of assets and rooms, and CSV import of rooms (the rooms export is the template).
 
 ## How it's built
 
