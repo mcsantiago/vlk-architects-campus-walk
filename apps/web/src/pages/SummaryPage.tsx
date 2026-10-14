@@ -6,7 +6,7 @@ import { useImportRooms, useSummary, useTree } from '../api/queries';
 import { ConditionDot } from '../components/ConditionPicker';
 import { ErrorNotice, Loading, Page } from '../components/Page';
 
-/** The office view: progress, counts by type, poor condition, what is left to walk. Filterable by building. */
+/** The office view: progress, then what is left to walk (the office's main question), counts by type and poor condition. Filterable by building. */
 export function SummaryPage() {
   const { campusId = '' } = useParams();
   const [buildingId, setBuildingId] = useState<string>('');
@@ -56,6 +56,28 @@ export function SummaryPage() {
           {s.walkers.length > 0 && (
             <div className="small muted">{s.walkers.map((w) => `${w.user.name} ${w.roomsWalked}`).join(' · ')}</div>
           )}
+        </div>
+
+        <div className="section card" style={{ marginTop: 0 }}>
+        <h3>Rooms not yet walked</h3>
+        {s.rooms.notWalked.length === 0 ? (
+          <p className="muted">Every room has been walked.</p>
+        ) : (
+          groupRooms(s.rooms.notWalked).map((g) => (
+            <div key={g.key} style={{ marginBottom: 10 }}>
+              <div className="small" style={{ fontWeight: 600 }}>
+                {g.label}
+              </div>
+              <div className="chips" style={{ marginTop: 4 }}>
+                {g.rooms.map((r) => (
+                  <Link key={r.id} className="chip" to={`/c/${campusId}/rooms/${r.id}`} style={{ display: 'inline-flex', alignItems: 'center', textDecoration: 'none', color: 'inherit' }}>
+                    {r.number} <span className="muted small" style={{ marginLeft: 4 }}>{r.name}</span>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          ))
+        )}
         </div>
 
         <div className="stats">
@@ -132,28 +154,6 @@ export function SummaryPage() {
               </li>
             ))}
           </ul>
-        )}
-      </div>
-
-      <div className="section card">
-        <h3>Rooms not yet walked</h3>
-        {s.rooms.notWalked.length === 0 ? (
-          <p className="muted">Every room has been walked.</p>
-        ) : (
-          groupRooms(s.rooms.notWalked).map((g) => (
-            <div key={g.key} style={{ marginBottom: 10 }}>
-              <div className="small" style={{ fontWeight: 600 }}>
-                {g.label}
-              </div>
-              <div className="chips" style={{ marginTop: 4 }}>
-                {g.rooms.map((r) => (
-                  <Link key={r.id} className="chip" to={`/c/${campusId}/rooms/${r.id}`} style={{ display: 'inline-flex', alignItems: 'center', textDecoration: 'none', color: 'inherit' }}>
-                    {r.number} <span className="muted small" style={{ marginLeft: 4 }}>{r.name}</span>
-                  </Link>
-                ))}
-              </div>
-            </div>
-          ))
         )}
       </div>
 
