@@ -11,6 +11,8 @@ import * as s from './schema.ts';
  * (data/sample), as the starting point for a walk. The walk then verifies what is on the
  * books instead of building the list from nothing: rows the district has rated keep their
  * rating and the person who gave it; rows in rooms nobody has reached yet come in unrated.
+ * Nothing is attributed that the source does not say: a room's walked date is kept, but the
+ * walk is credited to the import, since the files do not record who walked it.
  *
  * The files are taken as data, not as a schema we own: only the columns needed to place a row
  * are required, extra columns are ignored, room types are stored as written, and a category is
@@ -119,6 +121,39 @@ export async function importInventory(db: Db, dir: URL = SAMPLE_DIR, now = new D
   // --- validate every reference before touching the database -----------------------------
   const errors: string[] = [];
   const notes: string[] = [];
+
+  // Source ids are the only way rows refer to each other, so a repeated id would silently
+  // re-point everything that references it (the last row would win). Refuse instead, naming
+  // both lines. The same goes for the natural keys the database holds unique, and for asset
+  // tags, which identify one physical item.
+  const unique = <R,>(file: string, what: string, rows: { line: number; row: R }[], key: (r: R) => string) => {
+    const first = new Map<string, number>();
+    for (const { line, row } of rows) {
+      const k = key(row);
+      if (!k) continue;
+      const seen = first.get(k);
+      if (seen === undefined) first.set(k, line);
+      else errors.push(`${file}:${line} duplicate ${what} ${k.replaceAll('\u0000', ' / ')} (first on line ${seen})`);
+    }
+  };
+  unique('campuses.csv', 'campus_id', campuses, (r) => r.campus_id);
+  unique('campuses.csv', 'campus name', campuses, (r) => r.name.toLowerCase());
+  unique('buildings.csv', 'building_id', buildings, (r) => r.building_id);
+  unique('floors.csv', 'floor_id', floors, (r) => r.floor_id);
+  unique('floors.csv', 'building and level', floors, (r) => `${r.building_id}\u0000${r.level}`);
+  unique('rooms.csv', 'room_id', rooms, (r) => r.room_id);
+  unique('rooms.csv', 'floor and room number', rooms, (r) => `${r.floor_id}\u0000${r.room_number.toLowerCase()}`);
+  unique('asset_types.csv', 'asset_type_id', types, (r) => r.asset_type_id);
+  unique('assets.csv', 'asset_id', assets, (r) => r.asset_id);
+  unique('assets.csv', 'asset_tag', assets, (r) => r.asset_tag);
+  // Two source types with one name would become one catalogue type; say so rather than merge quietly.
+  const typeNames = new Map<string, number>();
+  for (const { line, row } of types) {
+    const seen = typeNames.get(row.name.trim().toLowerCase());
+    if (seen !== undefined) notes.push(`asset_types.csv:${line} ${row.name} has the same name as line ${seen}; both become one type`);
+    else typeNames.set(row.name.trim().toLowerCase(), line);
+  }
+
   const campusById = new Map(campuses.map((c) => [c.row.campus_id, c.row]));
   const buildingById = new Map(buildings.map((b) => [b.row.building_id, b.row]));
   const floorById = new Map(floors.map((f) => [f.row.floor_id, f.row]));
@@ -170,7 +205,8 @@ export async function importInventory(db: Db, dir: URL = SAMPLE_DIR, now = new D
   return db.transaction(async (tx) => {
     const summary: ImportSummary = { campuses: [], skipped: [], typesCreated: 0, notes };
 
-    // Walkers: the people who assessed anything, plus one stand-in for rooms walked by nobody we can name.
+    // Walkers: the people who assessed anything, plus the import itself, which is credited
+    // with every walked room and every row nobody has rated.
     const importWalker = `${district} (import)`;
     const walkerNames = new Set<string>([importWalker]);
     for (const { row } of assets) if (row.assessed_by) walkerNames.add(row.assessed_by);
@@ -230,7 +266,9 @@ export async function importInventory(db: Db, dir: URL = SAMPLE_DIR, now = new D
                 name: r.room_name || r.room_number,
                 roomType: r.room_type || 'other',
                 walkedAt,
-                walkedById: walkedAt ? userId(roomWalker(assets, r.room_id) ?? importWalker) : null,
+                // The source says when a room was walked, not by whom. Credit the import rather
+                // than guess an architect; each asset's own history keeps its real assessor.
+                walkedById: walkedAt ? userId(importWalker) : null,
               })
               .returning();
             roomIds.set(r.room_id, rRow!.id);
@@ -287,14 +325,6 @@ export async function importInventory(db: Db, dir: URL = SAMPLE_DIR, now = new D
     }
     return summary;
   });
-}
-
-/** The person who assessed most of a room's assets; ties go to the alphabetically first name. */
-function roomWalker(assets: { row: Row<'assets'> }[], roomId: string): string | null {
-  const tally = new Map<string, number>();
-  for (const { row } of assets) if (row.room_id === roomId && row.assessed_by) tally.set(row.assessed_by, (tally.get(row.assessed_by) ?? 0) + 1);
-  const ranked = [...tally.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
-  return ranked[0]?.[0] ?? null;
 }
 
 /** The district's name is only in the nested JSON copy of the data; fall back to its id. */

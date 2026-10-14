@@ -274,7 +274,7 @@ describe('office summary', () => {
 });
 
 describe('copy', () => {
-  it('copies the descriptive fields to another room as a new record, leaving photos behind', async () => {
+  it('copies the descriptive fields to another room as a new record, leaving photos and the tag behind', async () => {
     const source = (
       await call('POST', '/assets', {
         roomId: room('104').id,
@@ -293,7 +293,8 @@ describe('copy', () => {
       floorId: room('106').floorId,
       quantity: 24,
       condition: 3,
-      label: 'row desks',
+      // The label is an inventory tag: one tag, one item.
+      label: null,
       notes: 'laminate chipped on several',
       version: 1,
       assetType: { name: 'Student Desk' },

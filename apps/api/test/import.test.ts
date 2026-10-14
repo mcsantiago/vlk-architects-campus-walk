@@ -34,7 +34,8 @@ describe('inventory import', () => {
     const summary = await getCampusSummary(h.db, campus!.id);
     expect(summary.rooms).toMatchObject({ total: 129, walked: 129 - 54 });
     expect(summary.notRated).toEqual({ records: 207, units: expect.any(Number) });
-    expect(summary.walkers.map((w) => w.user.name).sort()).toEqual(['A. Moreno', 'Cedar Ridge ISD (import)', 'J. Okafor', 'K. Patel', 'L. Nguyen']);
+    // The files say when a room was walked, not by whom, so every walk is credited to the import.
+    expect(summary.walkers).toEqual([{ user: expect.objectContaining({ name: 'Cedar Ridge ISD (import)' }), roomsWalked: 75 }]);
     // The Field House has not been started: every room outstanding, its systems unrated.
     const fieldHouse = summary.rooms.notWalked.filter((r) => r.building.code === 'B-204');
     expect(fieldHouse).toHaveLength(14);
@@ -69,8 +70,8 @@ describe('inventory import', () => {
       .innerJoin(s.building, eq(s.floor.buildingId, s.building.id))
       .leftJoin(s.user, eq(s.room.walkedById, s.user.id))
       .where(and(eq(s.building.code, 'B-101'), eq(s.room.number, '101')));
-    // J. Okafor assessed 5 of the room's 7 assets, L. Nguyen 2.
-    expect(room101).toMatchObject({ roomType: 'Classroom', walker: 'J. Okafor' });
+    // J. Okafor assessed 5 of the room's 7 assets, but nothing says who walked it: no guess.
+    expect(room101).toMatchObject({ roomType: 'Classroom', walker: 'Cedar Ridge ISD (import)' });
     expect(room101!.walkedAt?.toISOString()).toBe('2026-09-22T17:00:00.000Z');
 
     const assets = await h.db
@@ -170,5 +171,26 @@ describe('inventory import from a different district', () => {
     await expect(importInventory(h.db, dir)).rejects.toThrow(/unknown room W1-999[\s\S]*bad condition 7[\s\S]*unknown type T9/);
     await writeFile(new URL('assets.csv', dir), 'building_id\nW1\n');
     await expect(importInventory(h.db, dir)).rejects.toThrow(/assets.csv is missing columns: asset_type_id/);
+  });
+
+  it('refuses repeated source ids and tags instead of letting the last row win', async () => {
+    const { writeFile } = await import('node:fs/promises');
+    const typesBefore = (await h.db.select().from(s.assetType)).length;
+    const campusesBefore = (await h.db.select().from(s.campus)).length;
+    await writeFile(new URL('campuses.csv', dir), 'campus_id,name\nX2,Eastfield Middle\n');
+    await writeFile(new URL('buildings.csv', dir), 'building_id,campus_id,name\nE1,X2,Main\n');
+    await writeFile(new URL('floors.csv', dir), 'floor_id,building_id,level\nE1-1,E1,1\n');
+    await writeFile(new URL('rooms.csv', dir), 'room_id,floor_id,room_number\nE1-101,E1-1,101\nE1-102,E1-1,101\n');
+    // Same id, different names: without the check the assets would silently become Stage Lights.
+    await writeFile(new URL('asset_types.csv', dir), 'asset_type_id,name,category\nT1,Kiln,Equipment\nT1,Stage Lights,Equipment\n');
+    await writeFile(new URL('assets.csv', dir), 'asset_id,asset_tag,asset_type_id,building_id\nA1,CR-1,T1,E1\nA2,CR-1,T1,E1\nA2,CR-3,T1,E1\n');
+    const refused = importInventory(h.db, dir);
+    await expect(refused).rejects.toThrow(/rooms.csv:3 duplicate floor and room number E1-1 \/ 101 \(first on line 2\)/);
+    await expect(importInventory(h.db, dir)).rejects.toThrow(/asset_types.csv:3 duplicate asset_type_id T1 \(first on line 2\)/);
+    await expect(importInventory(h.db, dir)).rejects.toThrow(/assets.csv:4 duplicate asset_id A2 \(first on line 3\)/);
+    await expect(importInventory(h.db, dir)).rejects.toThrow(/assets.csv:3 duplicate asset_tag CR-1 \(first on line 2\)/);
+    // Nothing was written.
+    expect((await h.db.select().from(s.assetType)).length).toBe(typesBefore);
+    expect((await h.db.select().from(s.campus)).length).toBe(campusesBefore);
   });
 });

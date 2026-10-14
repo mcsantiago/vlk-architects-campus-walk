@@ -4,6 +4,7 @@ import { useRef, useState } from 'react';
 import { describeError } from '../api/client';
 import { keys, useAssetCategories, useCreateAssetType, useUpdateAssetType } from '../api/queries';
 import { categoryName, orderedCategories } from './CategoryBadge';
+import { useConfirm } from './Confirm';
 
 /** The category a new type starts in: equipment if the table has it, else the first one. */
 const draftCategory = (categories: AssetCategoryView[]) => categories.find((c) => c.key === 'equipment') ?? categories[0];
@@ -67,6 +68,7 @@ export function TypePicker({ types, value, onChange }: TypePickerProps) {
   const update = useUpdateAssetType();
   const categories = useAssetCategories();
   const cats = categories.data ?? [];
+  const confirm = useConfirm();
 
   const selected = types.find((t) => t.id === value) ?? null;
 
@@ -111,8 +113,25 @@ export function TypePicker({ types, value, onChange }: TypePickerProps) {
     pick(type.id);
   }
 
+  /**
+   * A catalogue change, not an edit to this asset: it moves every asset of the type on every
+   * campus and is not versioned or kept in history the way asset edits are, so it is confirmed
+   * in so many words. In production this belongs to a catalogue maintainer, not the field form.
+   */
   async function saveSettings() {
     if (!selected || !editing) return;
+    const changes: string[] = [];
+    if (editing.category !== selected.category)
+      changes.push(`moves from ${categoryName(categories.data, selected.category)} to ${categoryName(categories.data, editing.category)}`);
+    if (editing.trackedIndividually !== selected.trackedIndividually)
+      changes.push(editing.trackedIndividually ? 'is tracked one record per unit' : 'is counted with a quantity');
+    const ok = await confirm({
+      title: `Change ${selected.name} everywhere?`,
+      detail: `Every ${selected.name} on every campus ${changes.join(' and ')}, in every list, roll-up and export. This changes the catalogue, not just this asset, and it is not recorded in asset history.`,
+      confirmLabel: 'Change for everyone',
+      cancelLabel: 'Keep as is',
+    });
+    if (!ok) return;
     await update.mutateAsync({ id: selected.id, ...editing });
     setEditing(null);
   }

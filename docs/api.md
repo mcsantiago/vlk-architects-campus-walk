@@ -294,7 +294,7 @@ Moving to `buildingId` alone makes it a building-level asset; to `floorId` alone
 **409**, **400**, **401**, **404**.
 
 ### `POST /assets/:id/copy`
-Copy an asset to another room, floor or building level. The copy gets the source's type, quantity, condition, label, notes, make, model and install year as a new record with `version` 1 and its own `created` event. Photos and the serial number stay with the original: they identify that unit, not the copy. **Auth:** required.
+Copy an asset to another room, floor or building level. The copy gets the source's type, quantity, condition, notes, make, model and install year as a new record with `version` 1 and its own `created` event. Photos, the label and the serial number stay with the original: they identify that unit, not the copy (the label is where an asset tag such as `CR-1004` lives, and one tag names one item). **Auth:** required.
 ```json
 { "roomId" | "floorId" | "buildingId": "uuid" }     // Location, see above
 ```

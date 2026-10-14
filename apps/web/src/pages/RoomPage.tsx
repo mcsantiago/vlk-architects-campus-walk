@@ -43,7 +43,22 @@ export function RoomPage() {
   const refreshRoom = () => qc.invalidateQueries({ queryKey: keys.room(roomId) });
   const addAsset = `/c/${campusId}/assets/new?roomId=${roomId}`;
 
+  // Imported inventory the walk has not rated yet. Walking a room is allowed with some left
+  // (an item can be locked away or gone), but never without saying how many.
+  const unrated = r.assets.filter((a) => a.condition === null).length;
+  const unratedText = `${unrated} of ${r.assets.length} asset${r.assets.length === 1 ? '' : 's'} not rated yet`;
+
   async function markWalked() {
+    if (
+      unrated > 0 &&
+      !(await confirm({
+        title: `Mark walked with ${unrated} asset${unrated === 1 ? '' : 's'} not rated?`,
+        detail: 'They stay on the inventory as "not rated", and the office summary keeps counting them. Do this when an item could not be reached or checked; otherwise rate them first.',
+        confirmLabel: 'Mark walked anyway',
+        cancelLabel: 'Keep rating',
+      }))
+    )
+      return;
     await walked.mutateAsync(true);
     navigate(back);
   }
@@ -78,13 +93,18 @@ export function RoomPage() {
                   Clear
                 </button>
               </div>
+              {unrated > 0 && <div className="notice warn small">Walked, but {unratedText}.</div>}
             </>
           ) : (
             <>
               <div className="row">
                 <span className="badge">not walked</span>
                 <span className="grow muted small">
-                  {r.assets.length === 0 ? 'Record what is in the room, then mark it walked.' : 'Done recording? Mark it and move on.'}
+                  {r.assets.length === 0
+                    ? 'Record what is in the room, then mark it walked.'
+                    : unrated > 0
+                      ? `${unratedText}. Rate them, then mark it walked.`
+                      : 'Done recording? Mark it and move on.'}
                 </span>
               </div>
               <button className="btn primary block" disabled={walked.isPending} onClick={markWalked}>

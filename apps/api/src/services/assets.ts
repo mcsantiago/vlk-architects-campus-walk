@@ -123,8 +123,9 @@ export async function createAsset(db: Db, input: CreateAssetInput, actorId: stri
 
 /**
  * Copies an asset's descriptive fields to another location as a new record with its own
- * version and history. Photos and the serial number stay with the original: they identify
- * that unit, not this one.
+ * version and history. Photos, the serial number and the label stay with the original: they
+ * identify that unit, not this one. The label is where an asset tag lives (CR-1004, RTU-3,
+ * the sticker on the unit), and two records with one tag would be two claims on one item.
  */
 export async function copyAsset(db: Db, id: string, input: CopyAssetInput, actorId: string): Promise<AssetView> {
   const source = await getAsset(db, id);
@@ -134,7 +135,7 @@ export async function copyAsset(db: Db, id: string, input: CopyAssetInput, actor
     {
       ...input,
       assetTypeId: source.assetType.id,
-      label: source.label,
+      label: null,
       quantity: source.quantity,
       condition: source.condition,
       notes: source.notes,
