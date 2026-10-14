@@ -35,12 +35,15 @@ export function Page({ title, subtitle, back, wide = false, children }: PageProp
           {user && (
             <button
               className="userchip"
-              title="Switch walker"
+              title={`Switch walker: ${user.name}`}
+              aria-label={`Switch walker: ${user.name}`}
               onClick={async () => {
                 if (await confirm({ title: `Stop walking as ${user.name}?`, confirmLabel: 'Switch walker' })) setCurrentUser(null);
               }}
             >
-              {user.name}
+              {/* Full name on wider screens; initials on a phone, where the title needs the room. */}
+              <span className="full" aria-hidden="true">{user.name}</span>
+              <span className="initials" aria-hidden="true">{initials(user.name)}</span>
             </button>
           )}
         </div>
@@ -48,6 +51,17 @@ export function Page({ title, subtitle, back, wide = false, children }: PageProp
       <main>{children}</main>
     </div>
   );
+}
+
+/** "Matthew Santiago" → "MS", "Dana R." → "DR", "Priya" → "P"; letters only, so "(Office)" is skipped. */
+export function initials(name: string): string {
+  const words = name
+    .split(/\s+/)
+    .map((w) => Array.from(w).find((ch) => /\p{L}/u.test(ch)))
+    .filter((ch): ch is string => !!ch);
+  if (words.length === 0) return '?';
+  const pick = words.length === 1 ? [words[0]!] : [words[0]!, words[words.length - 1]!];
+  return pick.join('').toUpperCase();
 }
 
 export function Loading({ label = 'Loading…' }: { label?: string }) {
