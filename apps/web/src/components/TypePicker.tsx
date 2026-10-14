@@ -1,4 +1,4 @@
-import type { AssetCategoryView, AssetTypeView } from '@campus-walk/shared';
+import { similarTypes, type AssetCategoryView, type AssetTypeView } from '@campus-walk/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { useRef, useState } from 'react';
 import { describeError } from '../api/client';
@@ -53,7 +53,9 @@ interface TypePickerProps {
  * filter. Filtering is in memory on the phone; the list comes from one GET, cached, and is
  * refreshed in the background each time the dropdown opens. When nothing matches, the walker
  * adds the type from here, with category and counting chosen inline, and it is selected as
- * soon as it is saved. The selected type's category can be changed from here too: category
+ * soon as it is saved. Before it is, names that look alike ("RTU" for Rooftop HVAC Unit,
+ * "Projecter") are offered as "Did you mean", so one kind of thing does not become several
+ * types that split the office's counts. The selected type's category can be changed from here too: category
  * belongs to the type, so that moves every asset of the type at once.
  */
 export function TypePicker({ types, value, onChange }: TypePickerProps) {
@@ -79,6 +81,10 @@ export function TypePicker({ types, value, onChange }: TypePickerProps) {
   const groups = orderedCategories(categories.data, matches.map((t) => t.category))
     .map((cat) => ({ cat, items: matches.filter((t) => t.category === cat.key) }))
     .filter((g) => g.items.length);
+  // Look-alikes for a name that is about to become a new type. In the list, only the ones the
+  // plain search did not already show; on the new-type card, all of them.
+  const lookalikes = name && !exact ? similarTypes(name, types) : [];
+  const moreLookalikes = lookalikes.filter((t) => !matches.includes(t));
 
   function show() {
     setOpen(true);
@@ -198,6 +204,17 @@ export function TypePicker({ types, value, onChange }: TypePickerProps) {
                 ))}
               </div>
             ))}
+            {moreLookalikes.length > 0 && (
+              <div>
+                <div className="option-group">Did you mean</div>
+                {moreLookalikes.map((t) => (
+                  <button key={t.id} type="button" className="option" onClick={() => pick(t.id)}>
+                    <span className="grow">{t.name}</span>
+                    <span className="small muted">{categoryName(categories.data, t.category)}</span>
+                  </button>
+                ))}
+              </div>
+            )}
             {name && !exact && (
               <button type="button" className="option add" onClick={startDraft}>
                 + Add “{name}” as a new type
@@ -210,11 +227,25 @@ export function TypePicker({ types, value, onChange }: TypePickerProps) {
       {draft && (
         <div className="card stack" style={{ gap: 10 }}>
           <strong>New type: {name}</strong>
+          {lookalikes.length > 0 && (
+            <div className="notice warn stack" style={{ gap: 8 }} role="status">
+              <span className="small">
+                Is it one of these? Using an existing type keeps the office's counts together; a new name for the same thing splits them.
+              </span>
+              <div className="chips">
+                {lookalikes.map((t) => (
+                  <button key={t.id} type="button" className="chip" onClick={() => pick(t.id)}>
+                    Use {t.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           <TypeSettings categories={cats} value={draft} onChange={setDraft} />
           {create.isError && <div className="notice error small">{describeError(create.error)}</div>}
           <div className="btn-row">
             <button type="button" className="btn primary" disabled={create.isPending || !draft.category} onClick={add}>
-              {create.isPending ? <span className="spinner" /> : 'Add type'}
+              {create.isPending ? <span className="spinner" /> : lookalikes.length ? `Add “${name}” anyway` : 'Add type'}
             </button>
             <button
               type="button"
