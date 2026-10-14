@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { BrowserRouter } from 'react-router';
+import { createBrowserRouter, RouterProvider } from 'react-router';
 import { App } from './App';
 import { ApiError } from './api/client';
 import { ConfirmProvider } from './components/Confirm';
@@ -16,14 +16,25 @@ const queryClient = new QueryClient({
   },
 });
 
+/**
+ * A data router so a form can block navigation (useBlocker needs one). The route table itself
+ * stays declarative in App's <Routes>, mounted under a single catch-all route.
+ */
+const router = createBrowserRouter([
+  {
+    path: '*',
+    element: (
+      <ConfirmProvider>
+        <App />
+      </ConfirmProvider>
+    ),
+  },
+]);
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
-        <ConfirmProvider>
-          <App />
-        </ConfirmProvider>
-      </BrowserRouter>
+      <RouterProvider router={router} />
     </QueryClientProvider>
   </StrictMode>,
 );

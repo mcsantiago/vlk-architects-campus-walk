@@ -4,6 +4,7 @@ interface Ask {
   title: string;
   detail?: string;
   confirmLabel?: string;
+  cancelLabel?: string;
   danger?: boolean;
 }
 
@@ -22,6 +23,8 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
   const resolver = useRef<(ok: boolean) => void>(() => {});
 
   const confirm = useCallback<AskFn>((a) => {
+    // A new question replaces an open one; the replaced one answers "no" rather than hanging.
+    resolver.current(false);
     setAsk(a);
     return new Promise<boolean>((resolve) => {
       resolver.current = resolve;
@@ -53,7 +56,7 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
                 {ask.confirmLabel ?? 'Confirm'}
               </button>
               <button className="btn" onClick={() => settle(false)}>
-                Cancel
+                {ask.cancelLabel ?? 'Cancel'}
               </button>
             </div>
           </div>

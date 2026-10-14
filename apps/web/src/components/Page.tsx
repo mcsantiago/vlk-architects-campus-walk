@@ -3,6 +3,7 @@ import { Link } from 'react-router';
 import { setCurrentUser, useCurrentUser } from '../user';
 import { describeError } from '../api/client';
 import { useConfirm } from './Confirm';
+import { discardDetail, unsavedChanges } from './UnsavedChanges';
 
 interface PageProps {
   title: string;
@@ -38,7 +39,14 @@ export function Page({ title, subtitle, back, wide = false, children }: PageProp
               title={`Switch walker: ${user.name}`}
               aria-label={`Switch walker: ${user.name}`}
               onClick={async () => {
-                if (await confirm({ title: `Stop walking as ${user.name}?`, confirmLabel: 'Switch walker' })) setCurrentUser(null);
+                // One dialog either way; with unsaved edits it says they will be lost.
+                const unsaved = unsavedChanges();
+                const ok = await confirm(
+                  unsaved
+                    ? { title: `Stop walking as ${user.name} and discard changes?`, detail: discardDetail(unsaved.note), confirmLabel: 'Discard and switch', cancelLabel: 'Keep editing', danger: true }
+                    : { title: `Stop walking as ${user.name}?`, confirmLabel: 'Switch walker' },
+                );
+                if (ok) setCurrentUser(null);
               }}
             >
               {/* Full name on wider screens; initials on a phone, where the title needs the room. */}

@@ -89,7 +89,11 @@ export function useUpdateAsset(assetId: string) {
   const invalidate = useInvalidateAssets();
   return useMutation({
     mutationFn: (input: UpdateAssetInput) => api<AssetView>(`/assets/${assetId}`, { method: 'PATCH', body: input }),
-    onSuccess: () => invalidate(assetId),
+    // Refresh in the background: the save is done once the PATCH answers, and the edit page
+    // holds navigation until then, so a slow refetch must not keep the walker waiting.
+    onSuccess: () => {
+      void invalidate(assetId);
+    },
   });
 }
 
