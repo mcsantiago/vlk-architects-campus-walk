@@ -318,21 +318,21 @@ Flow: `POST /uploads` → PUT the bytes to the returned URL (from the phone, dir
 ### `POST /uploads`
 **Auth:** required.
 ```json
-{ "contentType": "image/jpeg | image/png | image/webp" }
+{ "contentType": "image/jpeg | image/png | image/webp", "subject": "asset | room" }
 ```
 **201** →
 ```json
-{ "key": "photos/<uuid>.jpg", "url": "https://... presigned PUT", "expiresInSeconds": 900 }
+{ "key": "photos/assets/<uuid>.jpg", "url": "https://... presigned PUT", "expiresInSeconds": 900 }
 ```
-PUT the file to `url` with the same `Content-Type` header. The API mints the key; clients cannot choose it.
-**400** other content types.
+PUT the file to `url` with the same `Content-Type` header. The API mints the key; clients cannot choose it. `subject` picks the prefix: `photos/assets/` for a photo of one asset (including one taken before the asset is saved), `photos/rooms/` for a photo of the room itself, so the two sets can be exported or labelled separately.
+**400** other content types, or no `subject`.
 
 ### `POST /photos`
 Record an uploaded object and run the AI suggestion over it. **Auth:** required.
 ```json
-{ "s3Key": "photos/<uuid>.jpg", "assetId": "uuid | null", "roomId": "uuid | null" }   // at most one of assetId / roomId
+{ "s3Key": "photos/assets/<uuid>.jpg", "assetId": "uuid | null", "roomId": "uuid | null" }   // at most one of assetId / roomId
 ```
-Omit both for a photo taken before the asset exists (attach it via `POST /assets { photoIds }`); send `roomId` for a photo of the room itself.
+Omit both for a photo taken before the asset exists (attach it via `POST /assets { photoIds }`); send `roomId` for a photo of the room itself. The record must match the upload's subject: a `photos/rooms/` key needs `roomId`, and a `photos/assets/` key cannot take one (**400** otherwise).
 **201** → `Photo` (with `suggestion`, which may be null: model off, unsure, slow or failing; the photo is saved regardless).
 **400** `"unknown upload key"` (not a key this API minted); `"upload not found; PUT the file to the upload URL first"`; `"photo already recorded for this upload"`; `"upload is not a JPEG, PNG or WebP image"` (by its bytes); `"upload is image/png but was sent as image/jpeg"`; `"image is larger than 10 MB"`; both `assetId` and `roomId` given.
 **404** `assetId` or `roomId` unknown.

@@ -1,9 +1,9 @@
 import { and, eq, inArray, isNull } from 'drizzle-orm';
-import type { AiSuggestion, CreatePhotoInput, ImageContentType } from '@campus-walk/shared';
+import type { AiSuggestion, CreatePhotoInput, ImageContentType, PhotoSubjectKind } from '@campus-walk/shared';
 import type { Db } from '../db/client.ts';
 import * as s from '../db/schema.ts';
 import { badRequest, notFound } from '../errors.ts';
-import { newPhotoKey, PHOTO_KEY, URL_TTL_SECONDS, type PhotoStorage } from '../storage.ts';
+import { newPhotoKey, photoKeySubject, URL_TTL_SECONDS, type PhotoStorage } from '../storage.ts';
 import type { Suggester } from '../suggest.ts';
 import { getAsset } from './assets.ts';
 
@@ -35,8 +35,8 @@ export function sniffImageType(bytes: Uint8Array): ImageContentType | null {
 }
 
 /** Step 1 of the field flow: the phone asks for somewhere to PUT the photo. */
-export async function createUpload(storage: PhotoStorage, contentType: ImageContentType) {
-  const key = newPhotoKey(contentType);
+export async function createUpload(storage: PhotoStorage, subject: PhotoSubjectKind, contentType: ImageContentType) {
+  const key = newPhotoKey(subject, contentType);
   return { key, url: await storage.presignUpload(key, contentType), expiresInSeconds: URL_TTL_SECONDS };
 }
 
@@ -64,7 +64,13 @@ export async function createPhoto(
   suggester: Suggester,
   input: CreatePhotoInput,
 ): Promise<PhotoView> {
-  if (!PHOTO_KEY.test(input.s3Key)) throw badRequest('unknown upload key');
+  const subject = photoKeySubject(input.s3Key);
+  if (!subject) throw badRequest('unknown upload key');
+  // The prefix was chosen at upload time; a room photo filed under assets (or the reverse) would
+  // put the wrong picture in that set, so the record has to agree with it.
+  if ((subject === 'room') !== Boolean(input.roomId)) {
+    throw badRequest(subject === 'room' ? 'this upload is for a room photo; send roomId' : 'this upload is for an asset photo; it cannot be a room photo');
+  }
   const [existing] = await db.select({ id: s.photo.id }).from(s.photo).where(eq(s.photo.s3Key, input.s3Key));
   if (existing) throw badRequest('photo already recorded for this upload');
   if (input.assetId && !(await getAsset(db, input.assetId))) throw notFound('asset');
