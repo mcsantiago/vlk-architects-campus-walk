@@ -1,6 +1,6 @@
 # Campus Walk — Systems Diagram
 
-Status as of 2026-10-13. Everything shown is built and tested; the AWS stack in `infra/` is synthesised and its API image verified locally, but it has not been deployed (descoped for the submission).
+Status as of 2026-10-14. Everything shown is built and tested, with two exceptions: the AWS stack in `infra/` is synthesised and its API image verified locally but has not been deployed (descoped for the submission), and the Bedrock call behind the photo suggestion is written but has never run against a live model (no account access; it is tested with a fake suggester).
 Mermaid blocks render in Obsidian's reading view.
 
 ## 1. System context
@@ -24,7 +24,7 @@ flowchart LR
 
   pg[("Postgres 16\n(or PGlite embedded)")]
   s3[("Object storage\nRustFS local / S3 on AWS")]
-  bedrock["Claude on Amazon Bedrock\n(Mantle client, structured output)"]
+  bedrock["Claude on Amazon Bedrock\n(Mantle client, structured output)\nwritten, not exercised live"]
 
   walker --> web
   office --> web
@@ -34,6 +34,8 @@ flowchart LR
   routes -->|"Drizzle"| pg
   routes -->|"presign · get bytes"| s3
   routes -->|"photo → type + condition"| bedrock
+
+  importer["db:import-sample\n(district inventory CSVs)"] -->|"one transaction"| pg
 
   zod --> web
   zod --> routes
@@ -57,9 +59,10 @@ flowchart TB
   subgraph services["services/"]
     users["users.ts\nfind-or-create by name"]
     campus["campus.ts\ntree · room · walked · systems · summary"]
+    types["types.ts\ncategories · type find-or-create · recategorise"]
     assets["assets.ts\ncreate · update · move · delete\nversion check → 409 · asset_event"]
     location["location.ts\nroom → floor → building resolution"]
-    photos["photos.ts\nupload key · record + suggest · attach"]
+    photos["photos.ts\nupload key (photos/assets/ or photos/rooms/) · record + suggest · attach"]
     csv["csv.ts\nassets.csv · rooms.csv · rooms import"]
   end
 
@@ -67,17 +70,17 @@ flowchart TB
     storage["storage.ts\nPhotoStorage: S3PhotoStorage | MemoryPhotoStorage"]
     suggest["suggest.ts\nSuggester: BedrockSuggester | noSuggester\nnormalizeSuggestion()"]
     csvlib["csv.ts (root)\nRFC 4180 parse / serialize"]
-    db["db/client.ts\nDATABASE_URL → node-postgres | PGlite\ndb/schema.ts · drizzle/ migrations · db/seed.ts"]
+    db["db/client.ts\nDATABASE_URL → node-postgres | PGlite\ndb/schema.ts · drizzle/ migrations · db/seed.ts · db/import-sample.ts"]
   end
 
   server --> app --> routes
   routes --> errors
-  routes --> users & campus & assets & photos & csv
+  routes --> users & campus & types & assets & photos & csv
   assets --> location
   assets --> photos
   photos --> storage & suggest
   csv --> csvlib
-  users & campus & assets & photos & csv --> db
+  users & campus & types & assets & photos & csv --> db
 ```
 
 ## 3. Request lifecycle (any write)
@@ -140,10 +143,10 @@ sequenceDiagram
     API->>API: normalizeSuggestion → resolve type name → id
     API->>D: UPDATE photo SET ai_suggestion
   else refusal / malformed / error / timeout / > 4.5 MB
-    API->>API: suggestion = null (form opens empty; photo already saved)
+    API->>API: suggestion = null (form opens empty, photo already saved)
   end
   API-->>P: photo {id, url (presigned GET), suggestion}
-  P->>P: pre-fill type + condition + note; walker confirms or edits
+  P->>P: pre-fill type + condition + note, walker confirms or edits
   P->>API: POST /assets {roomId, assetTypeId, condition, notes, photoIds:[id]}
   API->>D: INSERT asset · UPDATE photo SET asset_id (must be unattached) · INSERT asset_event
   API-->>P: AssetView
@@ -151,103 +154,7 @@ sequenceDiagram
 
 ## 5. Data model
 
-```mermaid
-erDiagram
-  CAMPUS ||--o{ BUILDING : has
-  BUILDING ||--o{ FLOOR : has
-  FLOOR ||--o{ ROOM : has
-  BUILDING ||--o{ ASSET : "always located in"
-  FLOOR |o--o{ ASSET : "optionally on"
-  ROOM |o--o{ ASSET : "optionally in"
-  ASSET_CATEGORY ||--o{ ASSET_TYPE : groups
-  ASSET_TYPE ||--o{ ASSET : classifies
-  ASSET |o--o{ PHOTO : "photo of asset"
-  ROOM |o--o{ PHOTO : "photo of room"
-  ASSET ||--o{ ASSET_EVENT : history
-  APP_USER |o--o{ ROOM : walked
-  APP_USER ||--o{ ASSET_EVENT : acted
-
-  APP_USER {
-    uuid id PK
-    text name "unique lower(name)"
-  }
-  CAMPUS {
-    uuid id PK
-    text name
-    text district
-    text address "nullable, with contact_name/phone/email"
-  }
-  BUILDING {
-    uuid id PK
-    uuid campus_id FK
-    text code "unique per campus"
-    text name
-    int year_built
-  }
-  FLOOR {
-    uuid id PK
-    uuid building_id FK
-    int level "unique per building"
-    text name
-  }
-  ROOM {
-    uuid id PK
-    uuid floor_id FK
-    text number "unique per floor"
-    text name
-    text room_type
-    timestamptz walked_at
-    uuid walked_by_id FK
-  }
-  ASSET_CATEGORY {
-    text key PK "furniture, technology, ..."
-    text name "unique"
-    int sort_order "room listing and picker order"
-    text color "badge colour"
-    bool tracked_by_default
-  }
-  ASSET_TYPE {
-    uuid id PK
-    text name "unique"
-    text category FK "asset_category.key"
-    bool tracked_individually
-  }
-  ASSET {
-    uuid id PK
-    uuid building_id FK
-    uuid floor_id FK "composite FK (floor, building)"
-    uuid room_id FK "composite FK (room, floor)"
-    uuid asset_type_id FK
-    text label
-    int quantity "1 if tracked individually"
-    int condition "1..5, null until rated"
-    text notes
-    text manufacturer "from an imported inventory"
-    text model
-    text serial_number
-    int install_year
-    int version "optimistic concurrency"
-    timestamptz deleted_at "soft delete"
-  }
-  PHOTO {
-    uuid id PK
-    uuid asset_id FK "null until attached, or a room photo"
-    uuid room_id FK "set for photos of the room itself; never both"
-    text s3_key "unique"
-    jsonb ai_suggestion
-  }
-  ASSET_EVENT {
-    uuid id PK
-    uuid asset_id FK
-    text kind "created | updated | moved | deleted"
-    jsonb before
-    jsonb after
-    uuid changed_by FK
-    timestamptz changed_at
-  }
-```
-
-Location integrity lives in the database: `asset(floor_id, building_id)` references `floor(id, building_id)` and `asset(room_id, floor_id)` references `room(id, floor_id)`, so a room on the wrong floor or a floor in the wrong building cannot be stored. `location.ts` fills in the levels above the one the client sent and turns the same violations into readable 400s.
+Moved to [data-model.md](data-model.md): the table summary, the full ER diagram and the modelling decisions.
 
 ## 6. Environments
 
@@ -304,8 +211,8 @@ flowchart TB
     client["client.ts\nfetch wrapper · x-user-id · ApiError(status, details)"]
     queries["queries.ts\nTanStack Query hooks + invalidation"]
     photos["photos.ts\nshrinkImage (canvas, ≤1600px JPEG) → POST /uploads → PUT → POST /photos"]
-    user["user.ts\nchosen user + last name in localStorage"]
   end
+  user["user.ts\nchosen user + last name in localStorage"]
 
   subgraph pages["Pages"]
     who["WhoPage (stand-in login)"]
@@ -314,18 +221,20 @@ flowchart TB
     building["BuildingPage\ncontact · floor dropdown · rooms"]
     systems["SystemsPage\nbuilding/floor-level assets"]
     room["RoomPage\nwalked · room photos · assets (edit/copy/delete)"]
-    anew["AssetNewPage\nphoto → suggestion → fields"]
+    anew["AssetNewPage\nphoto → (suggestion) → fields"]
     asset["AssetPage\nphoto · facts · move · copy · delete · history"]
-    aedit["AssetEditPage\nfields · photos · 409 handling"]
+    aedit["AssetEditPage\nfields · photos · 409 handling · unsaved-changes guard"]
     photo["PhotoPage\nfull size · subject · delete"]
     summary["SummaryPage\noffice roll-up · CSV"]
   end
 
   subgraph comps["Components"]
-    fields["AssetFields\nTypePicker · Stepper · ConditionPicker"]
+    fields["AssetFields\nTypePicker (Did you mean · Change…) · Stepper · ConditionPicker"]
     loc["LocationPicker · CopySheet"]
-    psec["PhotoSection"]
-    info["SiteInfoCard"]
+    psec["PhotoSection · SuggestionNotice"]
+    info["InfoCard (SiteInfoCard)"]
+    rows["AssetRow · AssetList · CategoryBadge"]
+    guard["Confirm (useConfirm) · UnsavedChanges"]
   end
 
   main --> app --> pages
@@ -334,11 +243,13 @@ flowchart TB
   room --> psec
   asset & room --> loc
   campus & building --> info
+  room & systems --> rows
+  aedit --> guard
   psec --> photos --> client
   client --> user
 ```
 
-Field flow: pick a name once → projects → campus → building (floor dropdown) → room → **Add asset** (photo first; the suggestion pre-fills type, condition and note; the walker confirms) → **Mark room walked** → back to the building with the next unwalked room outlined. A stale save (409) shows "Updated by X while you were editing" with their changes and a button to load their version.
+Field flow: pick a name once → projects → campus → building (floor dropdown) → room → **Add asset** (photo first; with Bedrock configured the suggestion pre-fills type, condition and note, otherwise the form opens empty; the walker confirms) → **Mark room walked** → back to the building with the next unwalked room outlined. A stale save (409) shows "Updated by X while you were editing" with their changes and a button to load their version.
 
 ## 8. Endpoint map
 
@@ -346,7 +257,7 @@ Field flow: pick a name once → projects → campus → building (floor dropdow
 |---|---|---|
 | Identity | `GET/POST /users` | users.ts |
 | Browse | `GET /campuses`, `GET /campuses/:id/tree`, `GET /rooms/:id`, `GET /buildings/:id/systems` | campus.ts |
-| Catalogue | `GET /asset-types`, `POST /asset-types` (find-or-create by name) | types.ts |
+| Catalogue | `GET /asset-categories`, `GET /asset-types`, `POST /asset-types` (find-or-create by name), `PATCH /asset-types/:id` (category, counting) | types.ts |
 | Walk | `POST/DELETE /rooms/:id/walked` | campus.ts |
 | Assets | `GET /assets/:id`, `POST /assets`, `PATCH /assets/:id`, `POST /assets/:id/move`, `POST /assets/:id/copy`, `DELETE /assets/:id` | assets.ts |
 | Photos | `POST /uploads`, `POST /photos` (asset, room, or unattached), `GET /photos/:id`, `DELETE /photos/:id` | photos.ts |

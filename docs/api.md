@@ -1,6 +1,6 @@
 # Campus Walk — API Contract
 
-Base URL locally: `http://localhost:3000` directly, or `/api` on the web app's origin (the Vite dev server proxies it, which is how a phone on the LAN reaches it). All bodies and responses are JSON unless noted. Status as of 2026-10-12; every endpoint below (24) is implemented and covered by `apps/api/test/*.test.ts`.
+Base URL locally: `http://localhost:3000` directly, or `/api` on the web app's origin (the Vite dev server proxies it, which is how a phone on the LAN reaches it). All bodies and responses are JSON unless noted. Every endpoint below (26, plus `GET /health`) is implemented and covered by `apps/api/test/*.test.ts`.
 
 ## Conventions
 
@@ -43,9 +43,9 @@ Reads never need it. Writes without it, or with an id that is not a known user, 
 
 ### `AssetType`
 ```json
-{ "id": "uuid", "name": "Projector", "category": "furniture | technology | equipment | system", "trackedIndividually": true }
+{ "id": "uuid", "name": "Projector", "category": "technology", "trackedIndividually": true }
 ```
-`trackedIndividually` means one record per unit (`quantity` must be 1). Furniture is counted via `quantity`.
+`category` is a key from `GET /asset-categories` (by default `furniture`, `technology`, `equipment` or `system`; the list is data, not an enum). `trackedIndividually` means one record per unit (`quantity` must be 1); counted types such as furniture use `quantity`.
 
 ### `Asset`
 ```json
@@ -175,7 +175,7 @@ Room with ancestry, photos of the room itself, and its assets (each with its own
   "assets": [ Asset & { "photos": Photo[] } ]
 }
 ```
-`photos` are context shots of the room (`roomId` set); asset photos ride on each asset. Assets sort by category, type name, label, created time.
+`photos` are context shots of the room (`roomId` set); asset photos ride on each asset. Assets sort by category (its `sortOrder`), type name, label, created time.
 **404** unknown room.
 
 ### `GET /buildings/:id/systems`
@@ -201,15 +201,15 @@ Add a type to the catalogue from the field, or find it by name (case-insensitive
 { "name": "Kiln", "category": "equipment", "trackedIndividually": true }
 ```
 `category` is a category `key` from `GET /asset-categories`; an unknown key is a **400** `unknown category`. `trackedIndividually: true` means one record per unit; `false` means the type is counted with a quantity.
+**201** → `AssetType` (new or existing).
+**400** validation, **401**.
 
 ### `PATCH /asset-types/:id`
 Change a type's category or how it is counted. Category belongs to the type, so every asset of the type moves with it in every listing, roll-up and export. The name is not editable. **Auth:** required.
 ```jsonc
 { "category": "technology", "trackedIndividually": true }   // either or both
 ```
-**200** → `AssetType`. **400** when nothing is sent, or when switching a counted type to per-unit while live records with `quantity > 1` exist (`"<name> has records with a quantity above 1; split them before tracking it per unit"`). **404** unknown type.
-**201** → `AssetType` (new or existing).
-**400** validation, **401**.
+**200** → `AssetType`. **400** when nothing is sent, or when switching a counted type to per-unit while live records with `quantity > 1` exist (`"<name> has records with a quantity above 1; split them before tracking it per unit"`). **401**. **404** unknown type.
 
 ---
 
@@ -435,5 +435,9 @@ Semantics: buildings and floors are created when missing. A room that exists (sa
 ### Anything else
 **404** → `{ "error": "not found", "details": null }`
 
+## Not an endpoint
+
+Loading a district's existing inventory (campuses, buildings, floors, rooms, types and assets from `data/sample/*.csv` or another directory) is a command, `npm run db:import-sample [dir]`, not an API call: it is a one-off at the start of an engagement, run by whoever sets the project up. See the README.
+
 ## Not yet implemented (scope doc)
-Nothing in the API sketch remains. Possible additions once the web app exists: `PATCH /photos/:id` to re-attach, `GET /openapi.json` via `@hono/zod-openapi`.
+Nothing in the API sketch remains. Possible additions: `PATCH /photos/:id` to re-attach a photo, `GET /openapi.json` via `@hono/zod-openapi`.
