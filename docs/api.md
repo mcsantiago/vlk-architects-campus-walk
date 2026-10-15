@@ -342,7 +342,7 @@ One photo with whatever it is attached to, for the photo screen. **Auth:** none.
 **200** → `Photo & { "asset": Asset | null, "room": <room header, the GET /rooms/:id shape without photos/assets> | null }`
 **404**.
 
-Suggestion runs only when `BEDROCK_MODEL` is configured on the server. Images over 4.5 MB skip it. Expect 2–6 s of latency when it runs.
+Suggestion runs only when `BEDROCK_MODEL` is configured on the server. Images over 4.5 MB skip it. Each attempt is capped at 12 s with one retry. The Bedrock call has not been exercised against a live model yet (no account access for this submission); it is tested with a fake suggester.
 
 ### `DELETE /photos/:id`
 Deletes the record and best-effort deletes the object. **Auth:** required.

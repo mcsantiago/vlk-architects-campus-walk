@@ -113,6 +113,8 @@ sequenceDiagram
 
 ## 4. Photo → AI suggestion → asset
 
+The intended flow. The Bedrock call has not been exercised against a live model (no account access for this submission); everything else in the diagram runs, and the suggestion steps are tested with a fake suggester.
+
 ```mermaid
 sequenceDiagram
   autonumber
