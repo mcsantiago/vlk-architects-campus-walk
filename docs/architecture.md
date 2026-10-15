@@ -124,12 +124,12 @@ sequenceDiagram
   participant B as Claude on Bedrock
   participant D as Postgres
 
-  P->>API: POST /uploads {contentType}
-  API->>S3: presign PUT photos/<uuid>.jpg
+  P->>API: POST /uploads {contentType, subject: asset}
+  API->>S3: presign PUT photos/assets/<uuid>.jpg
   API-->>P: {key, url, expiresInSeconds}
   P->>S3: PUT image bytes (direct, CORS)
   P->>API: POST /photos {s3Key}
-  API->>API: key matches PHOTO_KEY? not already recorded?
+  API->>API: key one we minted? subject matches roomId? not already recorded?
   API->>S3: GET object, first 10 MB + 1 (ranged)
   API->>API: too big? magic bytes say JPEG/PNG/WebP and agree with the declared type?
   API->>D: SELECT asset_type (names for the prompt)

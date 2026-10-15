@@ -103,8 +103,8 @@ describe('photo flow', () => {
   };
 
   /** Simulates the phone's PUT to the presigned URL, with bytes that are what they claim to be. */
-  async function upload(contentType = 'image/jpeg') {
-    const { status, body } = await call('POST', '/uploads', { contentType });
+  async function upload(contentType = 'image/jpeg', subject: 'asset' | 'room' = 'asset') {
+    const { status, body } = await call('POST', '/uploads', { contentType, subject });
     expect(status).toBe(201);
     expect(body.url).toBe(`memory://upload/${body.key}`);
     storage.put(body.key, SIGNATURE[contentType]!, contentType);
@@ -135,10 +135,11 @@ describe('photo flow', () => {
     const anon = await app.request('/uploads', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ contentType: 'image/jpeg' }),
+      body: JSON.stringify({ contentType: 'image/jpeg', subject: 'asset' }),
     });
     expect(anon.status).toBe(401);
-    expect((await call('POST', '/uploads', { contentType: 'image/gif' })).status).toBe(400);
+    expect((await call('POST', '/uploads', { contentType: 'image/gif', subject: 'asset' })).status).toBe(400);
+    expect((await call('POST', '/uploads', { contentType: 'image/jpeg' })).status).toBe(400);
   });
 
   it('records a photo, runs the suggestion, and attaches it to a new asset', async () => {
@@ -187,7 +188,7 @@ describe('photo flow', () => {
 
   it('records a photo of the room itself and serves it on the photo screen', async () => {
     canned = null;
-    const photo = await call('POST', '/photos', { s3Key: await upload(), roomId });
+    const photo = await call('POST', '/photos', { s3Key: await upload('image/jpeg', 'room'), roomId });
     expect(photo.status).toBe(201);
     expect(photo.body).toMatchObject({ assetId: null, roomId });
 
@@ -211,7 +212,7 @@ describe('photo flow', () => {
   });
 
   it('checks what the bytes are, not what the PUT claimed, and caps the size', async () => {
-    const mint = async (contentType: string) => (await call('POST', '/uploads', { contentType })).body.key as string;
+    const mint = async (contentType: string) => (await call('POST', '/uploads', { contentType, subject: 'asset' })).body.key as string;
     const photosBefore = calls.length;
 
     // a PNG sent as a JPEG
@@ -250,7 +251,7 @@ describe('photo flow', () => {
   it('keeps the photo when the model throws', async () => {
     fail = true;
     try {
-      const key = await upload();
+      const key = await upload('image/jpeg', 'room');
       const res = await call('POST', '/photos', { s3Key: key, roomId });
       expect(res.status).toBe(201);
       expect(res.body.suggestion).toBeNull();
@@ -265,7 +266,7 @@ describe('photo flow', () => {
     expect(forged.status).toBe(400);
     expect(forged.body.error).toMatch(/unknown upload key/);
 
-    const notUploaded = await call('POST', '/photos', { s3Key: `photos/${randomUUID()}.jpg` });
+    const notUploaded = await call('POST', '/photos', { s3Key: `photos/assets/${randomUUID()}.jpg` });
     expect(notUploaded.status).toBe(400);
     expect(notUploaded.body.error).toMatch(/upload not found/);
 
@@ -276,5 +277,27 @@ describe('photo flow', () => {
     expect(dup.body.error).toMatch(/already recorded/);
 
     expect((await call('POST', '/photos', { s3Key: await upload(), assetId: randomUUID() })).status).toBe(404);
+  });
+
+  it('files room and asset photos under separate prefixes and keeps records to them', async () => {
+    const roomKey = await upload('image/jpeg', 'room');
+    const assetKey = await upload('image/png', 'asset');
+    expect(roomKey).toMatch(/^photos\/rooms\/[0-9a-f-]{36}\.jpg$/);
+    expect(assetKey).toMatch(/^photos\/assets\/[0-9a-f-]{36}\.png$/);
+
+    // A room upload cannot become an asset photo or a draft, and an asset upload cannot become a room photo.
+    const asset = (await call('POST', '/assets', { roomId, assetTypeId: projectorTypeId, condition: 3 })).body;
+    for (const body of [{ s3Key: roomKey }, { s3Key: roomKey, assetId: asset.id }]) {
+      const res = await call('POST', '/photos', body);
+      expect(res.status).toBe(400);
+      expect(res.body.error).toMatch(/room photo; send roomId/);
+    }
+    const wrongWay = await call('POST', '/photos', { s3Key: assetKey, roomId });
+    expect(wrongWay.status).toBe(400);
+    expect(wrongWay.body.error).toMatch(/asset photo/);
+
+    expect((await call('POST', '/photos', { s3Key: roomKey, roomId })).body).toMatchObject({ roomId, assetId: null });
+    expect((await call('POST', '/photos', { s3Key: assetKey, assetId: asset.id })).body).toMatchObject({ assetId: asset.id });
+    await call('DELETE', `/assets/${asset.id}`, { version: asset.version });
   });
 });

@@ -101,7 +101,14 @@ export type CopyAssetInput = z.infer<typeof CopyAssetInput>;
 export const IMAGE_CONTENT_TYPES = ['image/jpeg', 'image/png', 'image/webp'] as const;
 export type ImageContentType = (typeof IMAGE_CONTENT_TYPES)[number];
 
-export const CreateUploadInput = z.object({ contentType: z.enum(IMAGE_CONTENT_TYPES) });
+/**
+ * What a photo is of, decided before upload so room and asset photos land under separate
+ * prefixes in object storage (a room scene and a close-up of one item are different training data).
+ */
+export const PHOTO_SUBJECTS = ['asset', 'room'] as const;
+export type PhotoSubjectKind = (typeof PHOTO_SUBJECTS)[number];
+
+export const CreateUploadInput = z.object({ contentType: z.enum(IMAGE_CONTENT_TYPES), subject: z.enum(PHOTO_SUBJECTS) });
 export type CreateUploadInput = z.infer<typeof CreateUploadInput>;
 
 /** Records an uploaded object as a photo and runs the AI suggestion over it. */

@@ -7,7 +7,7 @@ import {
   type S3ClientConfig,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import type { ImageContentType } from '@campus-walk/shared';
+import type { ImageContentType, PhotoSubjectKind } from '@campus-walk/shared';
 
 /** How long a presigned URL stays valid. Uploads happen right away; downloads are re-signed on every read. */
 export const URL_TTL_SECONDS = 15 * 60;
@@ -38,9 +38,20 @@ export interface PhotoStorage {
 
 const EXTENSION: Record<ImageContentType, string> = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' };
 
-/** Keys are minted by the API so a client can never point a photo record at an arbitrary object. */
-export const newPhotoKey = (contentType: ImageContentType) => `photos/${randomUUID()}.${EXTENSION[contentType]}`;
-export const PHOTO_KEY = /^photos\/[0-9a-f-]{36}\.(jpg|png|webp)$/;
+/**
+ * Keys are minted by the API so a client can never point a photo record at an arbitrary object.
+ * Room and asset photos get their own prefix so either set can be exported, labelled or given its
+ * own lifecycle without a database join; the labels themselves (type, condition) stay in the database.
+ */
+const SUBJECT_PREFIX: Record<PhotoSubjectKind, string> = { asset: 'photos/assets', room: 'photos/rooms' };
+export const newPhotoKey = (subject: PhotoSubjectKind, contentType: ImageContentType) =>
+  `${SUBJECT_PREFIX[subject]}/${randomUUID()}.${EXTENSION[contentType]}`;
+const PHOTO_KEY = /^photos\/(assets|rooms)\/[0-9a-f-]{36}\.(jpg|png|webp)$/;
+/** The subject a key was minted for, or null for a key the API did not mint. */
+export function photoKeySubject(key: string): PhotoSubjectKind | null {
+  const match = PHOTO_KEY.exec(key);
+  return match ? (match[1] === 'rooms' ? 'room' : 'asset') : null;
+}
 
 export interface S3StorageOptions {
   bucket: string;

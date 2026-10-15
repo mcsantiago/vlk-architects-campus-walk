@@ -137,8 +137,8 @@ routes.delete('/assets/:id', async (c) => {
  */
 routes.post('/uploads', async (c) => {
   await requireUser(c);
-  const { contentType } = await parseBody(c, CreateUploadInput);
-  return c.json(await createUpload(c.get('storage'), contentType), 201);
+  const { contentType, subject } = await parseBody(c, CreateUploadInput);
+  return c.json(await createUpload(c.get('storage'), subject, contentType), 201);
 });
 routes.post('/photos', async (c) => {
   await requireUser(c);

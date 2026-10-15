@@ -49,7 +49,8 @@ export async function uploadPhoto(
   const blob = await shrinkImage(file);
 
   onStage('uploading');
-  const ticket = await api<UploadTicket>('/uploads', { method: 'POST', body: { contentType: 'image/jpeg' } });
+  const kind = subject && 'roomId' in subject ? 'room' : 'asset';
+  const ticket = await api<UploadTicket>('/uploads', { method: 'POST', body: { contentType: 'image/jpeg', subject: kind } });
   const put = await fetch(ticket.url, { method: 'PUT', headers: { 'content-type': 'image/jpeg' }, body: blob });
   if (!put.ok) throw new ApiError(put.status, `upload failed (${put.status})`);
 
